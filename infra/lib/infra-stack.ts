@@ -46,6 +46,15 @@ export class InfraStack extends cdk.Stack {
         sourcePath: "../build/dotnet-api.zip",
         outputId: "DotnetEndpointUrl",
       },
+      {
+        // Same shim again, exec'ing the launcher through the CPython bundled
+        // in the zip (see build:python-api). The revision still declares
+        // nodejs24.x because that is what boots the shim.
+        id: "PythonWebFunction",
+        functionName: "python-api-web",
+        sourcePath: "../build/python-api.zip",
+        outputId: "PythonEndpointUrl",
+      },
     ];
 
     for (const backend of backends) {

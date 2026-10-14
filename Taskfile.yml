@@ -22,6 +22,7 @@ tasks:
       - build:node-api
       - build:go-api
       - build:dotnet-api
+      - build:python-api
 
   build:node-api:
     desc: Bundle the Node API into build/node-api.zip
@@ -58,6 +59,18 @@ tasks:
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api.zip'
       - zip -jq '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api.zip' '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api/server' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api/appsettings.json'
       - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api'
+
+  build:python-api:
+    desc: Build FastAPI + a bundled CPython into build/python-api.zip (needs Docker)
+    cmds:
+      # Web Functions ship no Python, so unlike Go and .NET (single static
+      # binary) this zip carries the whole interpreter next to the code. All of
+      # it -- interpreter download, locked deps, tests, packaging -- happens on
+      # linux/arm64 inside src/python-api/Dockerfile, so there is no
+      # cross-platform resolution to do on the host. The export stage copies out
+      # just the finished zip.
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api.zip'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' -f '{{.ROOT_DIR}}/src/python-api/Dockerfile' '{{.ROOT_DIR}}'
 
   deploy:
     desc: Deploy the CDK stack (builds artifacts first). Extra args via `task deploy -- ...`
