@@ -1,20 +1,25 @@
 #!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib/core';
-import {InfraStack} from '../lib/infra-stack';
+import * as cdk from "aws-cdk-lib/core";
+import { InfraStack } from "../lib/infra-stack";
 
 const app = new cdk.App();
-new InfraStack(app, 'InfraStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
 
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+// The CloudFormation-Validate plugin bundled with aws-cdk-lib 2.273.0 doesn't
+// recognize the Web Function resource types yet. They are real, deployed
+// resource types; acknowledge the check so synth succeeds.
+cdk.Validations.of(app).acknowledge({
+  id: "CloudFormation-Validate::F3006",
+  reason: "Lambda Web Function resource types are newer than this CDK release",
+});
 
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
+const STACK_NAME = "LambdaWebFunctionNotNode";
 
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+cdk.Tags.of(app).add("Application", STACK_NAME);
+cdk.Tags.of(app).add("ManagedBy", "aws-cdk");
+
+new InfraStack(app, STACK_NAME, {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
 });

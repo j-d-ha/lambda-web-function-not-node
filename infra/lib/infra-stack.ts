@@ -1,17 +1,17 @@
-import * as cdk from 'aws-cdk-lib/core';
-import {Construct} from 'constructs';
-
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as cdk from "aws-cdk-lib/core";
+import { Construct } from "constructs";
+import { WebFunction } from "./web-function";
 
 export class InfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
+    const webFn = new WebFunction(this, "WebFunction", {
+      functionName: "node-api-web",
+      sourcePath: "../src/node-api/dist",
+      timeout: cdk.Duration.seconds(30),
+    });
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'InfraQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    new cdk.CfnOutput(this, "EndpointUrl", { value: webFn.endpointUrl });
   }
 }
