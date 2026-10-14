@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+vars:
+  GREETING: Hello, world!
+
+tasks:
+  format:
+    desc: Format files in the repository
+    cmd: format files $(git ls-files -co --exclude-standard)
