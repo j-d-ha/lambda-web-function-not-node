@@ -64,11 +64,16 @@ cross-platform resolution on the host.
   pinned patch cannot run `uv sync`/`uv run` ("No interpreter found for Python
   X"). `uv self update` fixes it. The build is unaffected: it pins its own uv in
   `Dockerfile`, which is also what makes the patch resolve deterministically.
-- The Dockerfile trims the managed tree before shipping it. It arrives with the
-  interpreter hardlinked three ways and with `libpython3.13.so*` that the
-  binary does not link against, which `cp -R` would otherwise expand into ~88 MB
-  of duplicates in the zip. Preserve the smoke run after trimming: it is what
-  proves the trimmed interpreter still boots.
+- The Dockerfile trims the managed tree before shipping it, and two traps make
+  that load-bearing rather than tidy-up. `bin/python` and `bin/python3` are
+  symlinks to `python3.13`, and `zip` dereferences symlinks unless given `-y`,
+  so leaving them in stores the interpreter three times. And
+  `libpython3.13.so*` ships even though the interpreter links only
+  libc/libm/librt. Together that is ~88 MB of the same bytes in the zip. The
+  trims use globs, not exact filenames, because a tcl or libpython version bump
+  would otherwise silently leave half of it behind.
+- Preserve the smoke run after trimming: it is the only thing that proves the
+  trimmed interpreter still boots.
 - Dependency changes go through `uv lock` (or `uv add`); the build runs `uv sync --frozen`, so nothing outside the lock can reach the zip.
 - The packaged zip is ~18 MB zipped / ~52 MB unzipped, well under Lambda's
   250 MB unzipped limit. Keep an eye on it if dependencies grow.

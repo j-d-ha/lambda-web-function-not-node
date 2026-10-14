@@ -40,16 +40,17 @@ RUN set -eux; \
     PY=$(readlink -f "$(uv python find)"); \
     MINOR=$(basename "$PY" | sed 's/^python//'); \
     PREFIX=$(dirname "$(dirname "$PY")"); \
-    # The managed tree ships duplicates: bin/{python,python3,python3.13} are one
-    # binary hardlinked three ways, and libpython3.13.so* is present although
-    # the interpreter is statically linked against it (only libc/libm/librt are
-    # needed). cp -R breaks the hardlinks, so shipping them untouched would put
-    # ~88 MB of the same bytes in the zip. Drop everything an HTTP server never
-    # loads: the duplicates, tcl/tk, C headers, man pages, pip and the test lib.
+    # Drop what an HTTP server never loads. Two traps make this worth spelling
+    # out. bin/python and bin/python3 are symlinks to python3.13, and zip
+    # dereferences symlinks unless given -y, so leaving them in stores the
+    # interpreter three times -- 44 MB of waste. And libpython3.13.so* ships
+    # even though the interpreter links only libc/libm/librt, another 44 MB.
+    # Globs, not exact filenames, so a tcl or libpython version bump cannot
+    # quietly leave half of it behind.
     find "$PREFIX/bin" -mindepth 1 ! -name "python$MINOR" -delete; \
-    rm -rf "$PREFIX/include" "$PREFIX/share" "$PREFIX/lib/pkgconfig"; \
-    rm -rf "$PREFIX/lib/tcl9" "$PREFIX/lib/tk9.0" "$PREFIX/lib/itcl4.3.8" "$PREFIX/lib/thread3.0.6"; \
-    rm -f "$PREFIX/lib/libtcl"* "$PREFIX/lib/libtk"* "$PREFIX/lib/libpython"*; \
+    rm -rf "$PREFIX/BUILD" "$PREFIX/include" "$PREFIX/share" "$PREFIX"/lib/pkgconfig; \
+    rm -rf "$PREFIX"/lib/tcl* "$PREFIX"/lib/tk* "$PREFIX"/lib/itcl* "$PREFIX"/lib/thread*; \
+    rm -f "$PREFIX"/lib/libtcl* "$PREFIX"/lib/libtk* "$PREFIX"/lib/libpython*; \
     rm -rf "$PREFIX/lib/python$MINOR/tkinter" "$PREFIX/lib/python$MINOR/idlelib" \
            "$PREFIX/lib/python$MINOR/ensurepip" "$PREFIX/lib/python$MINOR/config-$MINOR"*; \
     rm -rf "$PREFIX/lib/python$MINOR/site-packages/pip"*; \
@@ -60,7 +61,7 @@ RUN set -eux; \
     chmod +x /var/task/server "/var/task/python/bin/python$MINOR"; \
     cp index.js /var/task/index.js; \
     /app/smoke.sh /var/task; \
-    cd /var/task && zip -Xqr /python-api.zip .
+    cd /var/task && zip -qr /python-api.zip .
 
 # The zip is the only artifact; --output type=local copies it straight out.
 FROM scratch AS export

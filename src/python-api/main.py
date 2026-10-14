@@ -1,11 +1,13 @@
-# The whole Python backend in one file, so the zip needs no package layout.
-#
-# Lambda Web Functions only boot Node.js and import() index.js, the shared
-# execve shim in src/node-wrapper/. That shim replaces the process with
-# /var/task/server -- this file, run through the bundled interpreter named in
-# the shebang the build prepends (see `task build:python-api`). Because the exec
-# also takes Lambda's runtime interface client with it, this file has to POST
-# /2025-09-01/ready itself once uvicorn is listening.
+"""The Python backend, in one file so the zip needs no package layout.
+
+Lambda Web Functions boot Node.js and import() index.js -- the execve shim in
+src/node-wrapper/. That shim replaces the process with /var/task/server: this
+file, run through the interpreter the build puts on its shebang line. The exec
+also takes Lambda's runtime interface client with it, so this file has to POST
+/2025-09-01/ready itself once uvicorn is listening.
+"""
+
+import logging
 import os
 import threading
 import time
@@ -13,6 +15,8 @@ import urllib.request
 
 import uvicorn
 from fastapi import FastAPI
+
+log = logging.getLogger("python-api")
 
 # Same payload shape every backend in this repo answers /health with.
 app = FastAPI()
@@ -31,17 +35,24 @@ def _signal_ready_when_started(server: uvicorn.Server) -> None:
     """
     while not server.started:
         time.sleep(0.05)
+
     runtime_api = os.environ.get("AWS_LAMBDA_RUNTIME_API")
     if not runtime_api:  # local run: there is nothing to signal
         return
+
     request = urllib.request.Request(
         f"http://{runtime_api}/2025-09-01/ready",
         data=b"{}",
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request):
-        pass
+    try:
+        with urllib.request.urlopen(request, timeout=5):
+            pass
+    except OSError:
+        # The invocation fails with Runtime.InitTimeout either way; log why
+        # instead of leaving a traceback in a thread nobody is watching.
+        log.exception("POST /ready to %s failed", runtime_api)
 
 
 def serve() -> None:

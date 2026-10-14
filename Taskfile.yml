@@ -69,7 +69,6 @@ tasks:
       # linux/arm64 inside src/python-api/Dockerfile, so there is no
       # cross-platform resolution to do on the host. The export stage copies out
       # just the finished zip.
-      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}'
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api.zip'
       - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' -f '{{.ROOT_DIR}}/src/python-api/Dockerfile' '{{.ROOT_DIR}}'
 

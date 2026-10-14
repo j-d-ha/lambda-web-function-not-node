@@ -1,21 +1,26 @@
-"""Guards the /health contract, driven straight through the ASGI app so the
-test needs no HTTP client (only fastapi and uvicorn from requirements.txt)."""
+"""Guards the /health contract.
+
+Drives the ASGI app directly, so the test needs no HTTP client and no
+dependency beyond the app's own: fastapi and uvicorn.
+"""
 
 import asyncio
-import json
 import unittest
 
 import main
 
+EXPECTED_BODY = b'{"status":"Ok","backend":"python"}'
 
-def call_health() -> tuple[int, bytes]:
+
+def get(path: str) -> tuple[int, bytes]:
+    """Call ``path`` through the app's ASGI interface; return status and body."""
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
         "method": "GET",
-        "path": "/health",
-        "raw_path": b"/health",
+        "path": path,
+        "raw_path": path.encode(),
         "query_string": b"",
         "root_path": "",
         "headers": [],
@@ -40,9 +45,12 @@ def call_health() -> tuple[int, bytes]:
 
 class HealthContractTest(unittest.TestCase):
     def test_health_matches_the_shared_contract(self) -> None:
-        status, body = call_health()
+        status, body = get("/health")
         self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body), {"status": "Ok", "backend": "python"})
+        # Byte for byte, as the Go test does: every backend returns this exact
+        # payload, so key order and spacing are part of the contract, not just
+        # the decoded JSON.
+        self.assertEqual(body, EXPECTED_BODY)
 
 
 if __name__ == "__main__":
