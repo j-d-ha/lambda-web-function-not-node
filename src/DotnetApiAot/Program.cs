@@ -16,4 +16,4 @@ app.Run();
 [JsonSerializable(typeof(HealthResponse))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext { }
 
-internal record HealthResponse(string Status = "OK");
+internal record HealthResponse(string Status = "OK", string Backend = "ASP.NET");
