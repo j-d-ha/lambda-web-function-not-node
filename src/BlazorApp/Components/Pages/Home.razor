@@ -1,0 +1,44 @@
+﻿@page "/"
+@using System.Runtime.InteropServices
+
+<PageTitle>Blazor on a Lambda Web Function</PageTitle>
+
+<section class="hero">
+    <span class="pill">Blazor Web App</span>
+    <h1>Blazor on a Lambda Web Function</h1>
+    <p class="lede">
+        Server-rendered HTML out of Lambda, plus interactive WebAssembly in the browser &mdash;
+        from a non-Node backend running behind the shared <code>execve</code> shim.
+    </p>
+</section>
+
+<div class="grid">
+    <section class="card">
+        <h2>Rendered on the server</h2>
+        <p class="card-lede">This markup came out of the Web Function, not the browser.</p>
+        <dl class="kv">
+            <dt>server</dt>
+            <dd>@Environment.MachineName</dd>
+            <dt>rendered at</dt>
+            <dd>@_renderedAt</dd>
+            <dt>listening on</dt>
+            <dd>@_listenEndpoint</dd>
+            <dt>runtime</dt>
+            <dd>@RuntimeInformation.FrameworkDescription</dd>
+        </dl>
+    </section>
+
+    <section class="card">
+        <h2>Fetched from the backend</h2>
+        <p class="card-lede">Interactive WebAssembly in your browser, calling the Web Function's own API.</p>
+        <BackendProbe />
+    </section>
+</div>
+
+@code {
+    private readonly string _renderedAt = DateTimeOffset.UtcNow.ToString("u");
+
+    private readonly string _listenEndpoint =
+        Environment.GetEnvironmentVariable("AWS_LAMBDA_HTTP_ENDPOINT")
+        ?? "local (AWS_LAMBDA_HTTP_ENDPOINT unset)";
+}
