@@ -22,6 +22,7 @@ tasks:
       - build:node-api
       - build:go-api
       - build:dotnet-api
+      - build:dotnet-aot-api
       - build:python-api
 
   build:node-api:
@@ -47,24 +48,34 @@ tasks:
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/server'
 
   build:dotnet-api:
-    desc: Publish the ASP.NET NativeAOT API and bundle it into build/dotnet-api.zip
+    desc: Build the non-AOT ASP.NET API (self-contained, reflection-enabled) into build/dotnet-api.zip
+    cmds:
+      # Reflection means no trimming and no NativeAOT, so the zip carries the
+      # whole .NET runtime; everything -- publish, smoke, packaging -- happens
+      # on linux/arm64 inside src/DotnetApi/Dockerfile and only the zip comes
+      # back out.
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api.zip'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' -f '{{.ROOT_DIR}}/src/DotnetApi/Dockerfile' '{{.ROOT_DIR}}'
+
+  build:dotnet-aot-api:
+    desc: Publish the ASP.NET NativeAOT API and bundle it into build/dotnet-aot-api.zip
     cmds:
       # NativeAOT can't link a linux-arm64 binary on macOS (no Linux sysroot),
       # so the publish runs in a linux/arm64 SDK container. AssemblyName=server
       # so the native binary matches the wrapper's contract.
-      - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api'
-      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api'
-      - docker build -q -t dotnet-api-aot -f '{{.ROOT_DIR}}/src/DotnetApiAot/Dockerfile.aot' '{{.ROOT_DIR}}/src/DotnetApiAot'
-      - docker run --rm --platform linux/arm64 -u "$(id -u):$(id -g)" -e HOME=/tmp -v '{{.ROOT_DIR}}:/work' -w /work dotnet-api-aot dotnet publish src/DotnetApiAot/DotnetApiAot.csproj -c Release -r {{.GOOS}}-{{.GOARCH}} -p:AssemblyName=server -o build/dotnet-api --nologo
-      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api.zip'
-      - zip -jq '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api.zip' '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api/server' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api/appsettings.json'
-      - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api'
+      - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api'
+      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api'
+      - docker build -q -t dotnet-aot-api -f '{{.ROOT_DIR}}/src/DotnetApiAot/Dockerfile.aot' '{{.ROOT_DIR}}/src/DotnetApiAot'
+      - docker run --rm --platform linux/arm64 -u "$(id -u):$(id -g)" -e HOME=/tmp -v '{{.ROOT_DIR}}:/work' -w /work dotnet-aot-api dotnet publish src/DotnetApiAot/DotnetApiAot.csproj -c Release -r {{.GOOS}}-{{.GOARCH}} -p:AssemblyName=server -o build/dotnet-aot-api --nologo
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api.zip'
+      - zip -jq '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api.zip' '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api/server' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api/appsettings.json'
+      - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api'
 
   build:python-api:
     desc: Build FastAPI + a bundled CPython into build/python-api.zip (needs Docker)
     cmds:
-      # Web Functions ship no Python, so unlike Go and .NET (single static
-      # binary) this zip carries the whole interpreter next to the code. All of
+      # Web Functions ship no Python, so unlike Go and the .NET AOT build
+      # (single static binaries) this zip carries the whole interpreter next to
       # it -- interpreter download, locked deps, tests, packaging -- happens on
       # linux/arm64 inside src/python-api/Dockerfile, so there is no
       # cross-platform resolution to do on the host. The export stage copies out

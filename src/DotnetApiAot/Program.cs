@@ -16,7 +16,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
-app.MapGet("/health", () => TypedResults.Ok(new HealthResponse("OK", "ASP.NET")));
+app.MapGet("/health", () => TypedResults.Ok(new HealthResponse("OK", "dotnet-aot")));
 
 await app.StartAsync();
 

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The shim execs /var/task/server, so the apphost must be named server. -->
+    <AssemblyName>server</AssemblyName>
+    <!--
+      Reflection is a hard requirement here: this app relies on reflection-based
+      model binding and System.Text.Json serialization, and callers may use
+      reflection over their own types. So no NativeAOT and no trimming: every
+      assembly and its metadata ships intact. Everything below that remains is
+      the size budget (see README/AGENTS.md for measured numbers).
+    -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>
