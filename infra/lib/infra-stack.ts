@@ -39,12 +39,23 @@ export class InfraStack extends cdk.Stack {
         outputId: "GoEndpointUrl",
       },
       {
-        // Same shared shim; the published binary is a NativeAOT build, so
-        // there is no dotnet runtime in the environment either.
+        // Same shared shim; this build is self-contained and untrimmed (see
+        // src/DotnetApi), so the .NET runtime travels in the zip and
+        // reflection stays available. It keeps the original DotnetWebFunction
+        // logical id and dotnet-api-web name, so the AOT backend below moves
+        // to its own name rather than colliding with this one.
         id: "DotnetWebFunction",
         functionName: "dotnet-api-web",
         sourcePath: "../build/dotnet-api.zip",
         outputId: "DotnetEndpointUrl",
+      },
+      {
+        // The NativeAOT variant: no .NET runtime in the environment at all.
+        // Same shim, different published binary.
+        id: "DotnetAotWebFunction",
+        functionName: "dotnet-aot-api-web",
+        sourcePath: "../build/dotnet-aot-api.zip",
+        outputId: "DotnetAotEndpointUrl",
       },
       {
         // Same shim again, exec'ing the launcher through the CPython bundled

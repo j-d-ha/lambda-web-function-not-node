@@ -6,18 +6,19 @@ even though the managed runtime only boots Node.js.
 Lambda Web Functions are a newer Lambda flavor: you give AWS an HTTP app, point a
 Web Function revision at it, and get an HTTPS endpoint with its own scaling,
 concurrency, and rate-limit controls. The catch is the runtime — a revision's
-`runtime` today only accepts `nodejs24.x`. This repo shows four backends that
-all answer the same request, three of which run no Node at request time at all.
+`runtime` today only accepts `nodejs24.x`. This repo shows five backends that
+all answer the same request, four of which run no Node at request time at all.
 
 Every backend listens on the port in `AWS_LAMBDA_HTTP_ENDPOINT`, and answers
 `GET /health` with the same payload shape, naming itself:
 
-| Backend             | Directory          | Response                              |
-| ------------------- | ------------------ | ------------------------------------- |
-| Node.js (reference) | `src/node-api`     | `{"status":"Ok","backend":"node"}`    |
-| Go                  | `src/go-api`       | `{"status":"Ok","backend":"go"}`      |
-| ASP.NET (NativeAOT) | `src/DotnetApiAot` | `{"status":"OK","backend":"ASP.NET"}` |
-| Python (FastAPI)    | `src/python-api`   | `{"status":"Ok","backend":"python"}`  |
+| Backend                            | Directory          | Response                                 |
+| ---------------------------------- | ------------------ | ---------------------------------------- |
+| Node.js (reference)                | `src/node-api`     | `{"status":"Ok","backend":"node"}`       |
+| Go                                 | `src/go-api`       | `{"status":"Ok","backend":"go"}`         |
+| ASP.NET (NativeAOT, trimmed)       | `src/DotnetApiAot` | `{"status":"OK","backend":"dotnet-aot"}` |
+| ASP.NET (.NET runtime, reflection) | `src/DotnetApi`    | `{"status":"Ok","backend":"dotnet"}`     |
+| Python (FastAPI)                   | `src/python-api`   | `{"status":"Ok","backend":"python"}`     |
 
 ## How it works
 
@@ -51,11 +52,18 @@ The non-Node backends follow that contract:
 - **Go** ([`src/go-api/main.go`](src/go-api/main.go)) listens, calls
   `signalReady()`, and serves `net/http` with a 900ms `SIGTERM` graceful
   shutdown (Lambda gives you one second after the signal).
-- **ASP.NET** ([`src/DotnetApiAot/Program.cs`](src/DotnetApiAot/Program.cs)) uses
-  `WebApplication.CreateSlimBuilder` and, when
+- **ASP.NET, NativeAOT** ([`src/DotnetApiAot/Program.cs`](src/DotnetApiAot/Program.cs))
+  uses `WebApplication.CreateSlimBuilder` and, when
   `AWS_LAMBDA_HTTP_ENDPOINT` is set, binds to it and POSTs `/ready` after
   `StartAsync`. It is published with [NativeAOT](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/),
-  so there is no .NET runtime in the environment either.
+  so there is no .NET runtime in the environment either — it is the smallest
+  backend here, and it gives up reflection to get there.
+- **ASP.NET, managed .NET runtime** ([`src/DotnetApi/Program.cs`](src/DotnetApi/Program.cs))
+  is the same shape but drops AOT and trimming on purpose, because it explicitly
+  needs reflection: the zip carries the whole .NET runtime and every framework
+  assembly, self-contained and untrimmed. That is what the ~45 MB zip buys. See
+  [`src/DotnetApi/AGENTS.md`](src/DotnetApi/AGENTS.md) for the trade and the
+  measured sizes.
 - **Python** ([`src/python-api/main.py`](src/python-api/main.py)) is the odd one
   out: there is no Python in the Web Function environment, so the zip carries a
   whole interpreter. The build bundles a relocatable
@@ -72,11 +80,12 @@ the reference consumer.
 ```
 src/node-api/       Hono app on @hono/node-server (the Node baseline)
 src/go-api/         Go net/http server + the shared shim in its zip
-src/DotnetApiAot/   ASP.NET minimal API, NativeAOT-published
+src/DotnetApiAot/   ASP.NET minimal API, NativeAOT-published (small, no reflection)
+src/DotnetApi/      ASP.NET minimal API, self-contained + untrimmed (reflection)
 src/python-api/     FastAPI app, shipped with a bundled CPython interpreter
 src/node-wrapper/   the execve shim every non-Node backend zips in as index.js
 infra/              AWS CDK app: a WebFunction L2 construct + the stack
-build/              generated artifacts (node-api.zip, go-api.zip, dotnet-api.zip, python-api.zip)
+build/              generated artifacts (node-api.zip, go-api.zip, dotnet-api.zip, dotnet-aot-api.zip, python-api.zip)
 ```
 
 `infra/lib/web-function.ts` is a small L2 construct over
@@ -92,16 +101,22 @@ endpoint.
 task build
 ```
 
-Writes `build/node-api.zip`, `build/go-api.zip`, `build/dotnet-api.zip`, and
-`build/python-api.zip`.
+Writes `build/node-api.zip`, `build/go-api.zip`, `build/dotnet-api.zip`,
+`build/dotnet-aot-api.zip`, and `build/python-api.zip`.
 
 Web Functions are arm64 only (Graviton), so every artifact is built for
-`linux/arm64`. Three build details worth knowing:
+`linux/arm64`. Four build details worth knowing:
 
-- The .NET NativeAOT publish runs in a `linux/arm64` SDK container
+- The **NativeAOT** .NET publish runs in a `linux/arm64` SDK container
   ([`src/DotnetApiAot/Dockerfile.aot`](src/DotnetApiAot/Dockerfile.aot)) because
   macOS can't link a Linux arm64 native binary. You need Docker for this step,
-  and for the Python one.
+  and for the two managed ones below.
+- The **managed** .NET build ([`src/DotnetApi/Dockerfile`](src/DotnetApi/Dockerfile))
+  is a self-contained publish, so it needs no native toolchain, but it still
+  publishes, smokes and packs the bundle on `linux/arm64` so the runtime that
+  ships is the one that was exercised. Reflection means no trimming and no AOT,
+  so this zip carries the whole .NET runtime: ~115 MB unzipped / ~45 MB zipped,
+  against ~10 MB for the NativeAOT build.
 - The Go, .NET and Node zips put the shim and the binary in the zip root (via
   `zip -j`), because the shim hardcodes `/var/task/server`.
 - The Python build is a real [uv](https://docs.astral.sh/uv/) project
@@ -121,7 +136,8 @@ task deploy
 
 Builds first, then runs `cdk deploy` from `infra/`. The stack deploys one Web
 Function per backend (`node-api-web`, `go-api-web`, `dotnet-api-web`,
-`python-api-web`) and prints an endpoint URL for each. You need AWS credentials
+`dotnet-aot-api-web`, `python-api-web`) and prints an endpoint URL for each. You
+need AWS credentials
 ([AWS CLI configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html))
 and a region where Web Functions are available.
 
@@ -136,7 +152,9 @@ and a region where Web Functions are available.
 The Python test also runs inside `task build:python-api`, which additionally
 boots the assembled bundle on `linux/arm64` and checks `/health` before it zips
 it — the bundle only runs on the target architecture, so that is where the
-interpreter and wheels are actually exercised.
+interpreter and wheels are actually exercised. `task build:dotnet-api` does the
+same for the managed .NET build: `src/DotnetApi/smoke.sh` boots the published
+bundle and checks `/health` before the zip is written.
 
 ## Docs
 
@@ -145,6 +163,7 @@ interpreter and wheels are actually exercised.
 - [`process.execve`](https://nodejs.org/docs/latest-v24.x/api/process.html#processexecvefile-args-env)
 - [`AWS::Lambda::WebFunction` (CloudFormation)](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-webfunction.html)
 - [Native AOT deployment](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/)
+- [Trimming options](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/trimming-options) (why reflection rules it out here)
 - [python-build-standalone](https://github.com/astral-sh/python-build-standalone) (the bundled CPython)
 - [FastAPI](https://fastapi.tiangolo.com) and [uvicorn](https://www.uvicorn.org)
 - [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
