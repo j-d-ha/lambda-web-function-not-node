@@ -1,0 +1,6 @@
+@AotApi_HostAddress = http://localhost:5037
+
+GET {{AotApi_HostAddress}}/health
+Accept: application/json
+
+###
