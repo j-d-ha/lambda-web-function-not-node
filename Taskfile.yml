@@ -22,6 +22,11 @@ vars:
   PY_STAGE: '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api'
   PY_SITE: '{{.PY_STAGE}}/python/lib/python{{.PYTHON_MINOR}}/site-packages'
   PY_BIN: '{{.PY_STAGE}}/python/bin/python{{.PYTHON_MINOR}}'
+  # Where test:python-api unpacks the zip to run it on linux/arm64.
+  PY_SMOKE: '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api-smoke'
+  # Exported from uv.lock during the build. Kept outside PY_STAGE so the lock
+  # file does not end up in the zip.
+  PY_REQS: '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api-requirements.txt'
 
 tasks:
   format:
@@ -91,9 +96,13 @@ tasks:
       - rm -rf '{{.PY_STAGE}}/python/lib/python{{.PYTHON_MINOR}}/ensurepip' '{{.PY_STAGE}}/python/lib/python{{.PYTHON_MINOR}}/idlelib' '{{.PY_STAGE}}/python/lib/python{{.PYTHON_MINOR}}/tkinter'
       - rm -rf '{{.PY_SITE}}/pip' '{{.PY_SITE}}/pip-'*.dist-info
       - find '{{.PY_STAGE}}/python/bin' -maxdepth 1 -type l -delete
-      # 3. Dependencies resolved for the target platform, not this host, so the
-      #    compiled wheels (pydantic-core) are linux/arm64.
-      - uv pip install --quiet --target '{{.PY_SITE}}' --python-platform '{{.PYTHON_PLATFORM}}' --python-version '{{.PYTHON_MINOR}}' --only-binary ':all:' -r requirements.txt
+      # 3. Dependencies come from uv.lock, the one lock for both development
+      #    and this build. Export it, then install for the target platform so
+      #    the compiled wheels (pydantic-core) are linux/arm64; --require-hashes
+      #    is what makes the lock binding.
+      - uv export --quiet --frozen --no-emit-project --format requirements-txt -o '{{.PY_REQS}}'
+      - uv pip install --quiet --target '{{.PY_SITE}}' --python-platform '{{.PYTHON_PLATFORM}}' --python-version '{{.PYTHON_MINOR}}' --require-hashes -r '{{.PY_REQS}}'
+      - rm -f '{{.PY_REQS}}'
       - cp '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.PY_STAGE}}/index.js'
       # 4. Zip root: the shim, the launcher, and the runtime. The launcher is
       #    main.py with an interpreter shebang, so execve runs the bundled
@@ -103,6 +112,21 @@ tasks:
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api.zip'
       - cd '{{.PY_STAGE}}' && zip -Xqr '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api.zip' .
       - rm -rf '{{.PY_STAGE}}'
+
+  test:python-api:
+    desc: Run build/python-api.zip on linux/arm64 and check /health (needs Docker)
+    deps:
+      - build:python-api
+    cmds:
+      # The bundle only runs on the target architecture, so the check is a
+      # linux/arm64 container rather than a local venv. The zip is unpacked on
+      # the host (macOS unzip keeps the exec bits) and mounted at /var/task the
+      # way Lambda lays it out; smoke.sh starts server and asserts the payload.
+      - rm -rf '{{.PY_SMOKE}}'
+      - mkdir -p '{{.PY_SMOKE}}'
+      - cd '{{.PY_SMOKE}}' && unzip -q '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api.zip'
+      - docker run --rm --platform linux/arm64 -v '{{.PY_SMOKE}}:/var/task:ro' -v '{{.ROOT_DIR}}/src/python-api/smoke.sh:/smoke.sh:ro' amazonlinux:2023 sh /smoke.sh
+      - rm -rf '{{.PY_SMOKE}}'
 
   deploy:
     desc: Deploy the CDK stack (builds artifacts first). Extra args via `task deploy -- ...`

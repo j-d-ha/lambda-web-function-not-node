@@ -1,0 +1,18 @@
+[project]
+name = "python-api"
+version = "0.0.0"
+description = "FastAPI backend for this repo's Lambda Web Function."
+# The interpreter version lives here, not only in the Taskfile, so a dependency
+# that raises its own requires-python fails at `uv lock`, not at deploy.
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    # Plain uvicorn, not uvicorn[standard]: no uvloop/httptools, so no extra
+    # native wheels to keep in step with the bundled interpreter.
+    "fastapi==0.143.1",
+    "uvicorn==0.54.0",
+]
+
+[tool.uv]
+# The app is shipped as the `server` entrypoint, not installed as a package,
+# so uv must not try to build or install the project itself.
+package = false
