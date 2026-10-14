@@ -37,4 +37,4 @@ test("InfraStack creates the web function stack with an endpoint output", () => 
   expect(revision.BuildConfig.CodeConfig.S3Object.Bucket).toEqual({
     Ref: expect.any(String),
   });
-};);
+});

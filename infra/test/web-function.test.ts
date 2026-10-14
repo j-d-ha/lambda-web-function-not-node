@@ -171,6 +171,41 @@ test("endpoint depends on the revision, revision on the function", () => {
   expect(rev.DependsOn).toContain(fnLogicalId);
 });
 
+test("grants lambda.amazonaws.com read access to the code object", () => {
+  const template = Template.fromStack(makeStack());
+
+  template.hasResourceProperties("AWS::S3::BucketPolicy", {
+    PolicyDocument: {
+      Statement: Match.arrayWith([
+        Match.objectLike({
+          Effect: "Allow",
+          Principal: { Service: "lambda.amazonaws.com" },
+          Action: Match.arrayWith(["s3:GetObject", "s3:GetObjectVersion"]),
+          Condition: {
+            ArnLike: {
+              "aws:SourceArn": Match.objectLike({
+                "Fn::Join": [
+                  "",
+                  Match.arrayWith([":web-function/test-web-fn/revision/*"]),
+                ],
+              }),
+            },
+          },
+        }),
+      ]),
+    },
+  });
+
+  // The revision is rejected at create time unless the grant lands first.
+  const rev = Object.values(
+    template.findResources("AWS::Lambda::WebFunctionRevision"),
+  )[0];
+  const policyId = Object.keys(
+    template.findResources("AWS::S3::BucketPolicy"),
+  )[0];
+  expect(rev.DependsOn).toContain(policyId);
+});
+
 test("multi-region endpoint without regions fails at synth, not deploy", () => {
   const app = new App();
   Validations.of(app).acknowledge({
