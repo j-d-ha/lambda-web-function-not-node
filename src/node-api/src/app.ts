@@ -2,7 +2,7 @@ import { Hono } from "hono";
 
 const app = new Hono();
 
-app.get("/", (c) => {
+app.get("/health", (c) => {
   return c.json({ status: "Ok", backend: "node" }, 200);
 });
 
