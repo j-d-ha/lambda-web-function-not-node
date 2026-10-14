@@ -22,10 +22,15 @@ Node, Go, and ASP.NET backends in `src/` return.
 ## Layout
 
 This is a real [uv](https://docs.astral.sh/uv/) project, like any other Python
-app: `pyproject.toml` declares the dependencies and the interpreter version,
-and `uv.lock` is the single lock for both development and the build. There is
-no `requirements.txt`. `[tool.uv] package = false` because the app ships as the
-`server` entrypoint rather than an installed package.
+app: `pyproject.toml` declares the dependencies and the interpreter range,
+`.python-version` pins the exact interpreter, and `uv.lock` is the single lock
+for both development and the build. There is no `requirements.txt`.
+`[tool.uv] package = false` because the app ships as the `server` entrypoint
+rather than an installed package.
+
+`Dockerfile` is the build. It runs on `linux/arm64` so the interpreter, the
+locked wheels and the tests are all the ones being shipped, with no
+cross-platform resolution on the host.
 
 ## Run
 
@@ -35,23 +40,35 @@ no `requirements.txt`. `[tool.uv] package = false` because the app ships as the
 - `uv run python main.py` runs the server locally. It reads
   `AWS_LAMBDA_HTTP_ENDPOINT` (default `localhost:3000`); with no
   `AWS_LAMBDA_RUNTIME_API` the ready call is skipped, same as outside Lambda.
-- `task build:python-api` from the repo root assembles and zips
-  `build/python-api.zip`. It exports `uv.lock` and installs those exact versions
-  for the target platform, then downloads the arm64 interpreter, so it needs
-  network access and the `uv` CLI.
-- `task test:python-api` unpacks the built zip inside a `linux/arm64` container
-  and checks `/health`. The bundle only runs on the target architecture, so this
-  is the only place the interpreter and wheels are actually exercised. Needs
-  Docker.
+- `task build:python-api` from the repo root builds the zip with
+  `docker buildx build --platform linux/arm64` against `Dockerfile`, and the
+  export stage copies out only `build/python-api.zip`. Docker's layer cache
+  holds the interpreter and dependency layers, so repeat builds only redo the
+  cheap layers. Needs Docker and network access.
+- That build also runs `uv run python -m unittest` and `smoke.sh`, which boots
+  the assembled bundle and checks `/health`. The bundle only runs on the target
+  architecture, so this is the only place the interpreter and wheels are
+  actually exercised — do not delete the smoke step without putting the check
+  somewhere else.
 
 ## Notes
 
 - Everything must be built for **linux/arm64** (Web Functions are Arm64 only).
-  The build installs with
-  `uv pip install --python-platform aarch64-unknown-linux-gnu --require-hashes`,
-  and the interpreter tarball is the `aarch64-unknown-linux-gnu` build.
-- Dependency changes go through `uv lock` (or `uv add`); the build reads that
-  lock, so a version that is only in the lock file and not in `uv.lock` cannot
-  reach the zip.
-- The packaged zip is ~36 MB zipped / ~98 MB unzipped, well under Lambda's
+  `--platform linux/arm64` on an arm64 host is native; on an x86 CI runner it
+  falls back to emulation and is much slower, so prefer an arm64 runner.
+- The interpreter is uv's managed build, downloaded because
+  `.python-version` pins it. There is no hand-rolled fetch and no
+  `--python-platform`: inside an arm64 container the wheels are just the right
+  ones. Bumping Python means `uv python pin <version>`.
+- uv embeds its list of available Python builds, so a local uv older than the
+  pinned patch cannot run `uv sync`/`uv run` ("No interpreter found for Python
+  X"). `uv self update` fixes it. The build is unaffected: it pins its own uv in
+  `Dockerfile`, which is also what makes the patch resolve deterministically.
+- The Dockerfile trims the managed tree before shipping it. It arrives with the
+  interpreter hardlinked three ways and with `libpython3.13.so*` that the
+  binary does not link against, which `cp -R` would otherwise expand into ~88 MB
+  of duplicates in the zip. Preserve the smoke run after trimming: it is what
+  proves the trimmed interpreter still boots.
+- Dependency changes go through `uv lock` (or `uv add`); the build runs `uv sync --frozen`, so nothing outside the lock can reach the zip.
+- The packaged zip is ~18 MB zipped / ~52 MB unzipped, well under Lambda's
   250 MB unzipped limit. Keep an eye on it if dependencies grow.

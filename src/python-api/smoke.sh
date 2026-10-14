@@ -1,11 +1,15 @@
 #!/bin/sh
-# Runs inside a linux/arm64 container with the unpacked bundle at /var/task,
-# laid out the way Lambda does. Starts the server and asserts the /health
-# payload byte for byte, the same contract test_main.py guards from the ASGI
-# side -- this one proves the bundled interpreter and wheels actually run.
+# Starts the built server the way Lambda does and asserts the /health payload
+# byte for byte. Runs inside the build image against the assembled bundle, so it
+# proves the bundled interpreter and wheels actually boot -- not just that the
+# ASGI app answers when imported (that is test_main.py's job).
+#
+# Usage: smoke.sh [bundle-dir]   # the zip root: index.js, server, python/
 set -eu
 
-AWS_LAMBDA_HTTP_ENDPOINT=0.0.0.0:3000 /var/task/server >/tmp/server.log 2>&1 &
+TASK_DIR=${1:-/var/task}
+
+AWS_LAMBDA_HTTP_ENDPOINT=0.0.0.0:3000 "$TASK_DIR/server" >/tmp/server.log 2>&1 &
 server_pid=$!
 trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 

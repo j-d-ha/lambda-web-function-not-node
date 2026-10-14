@@ -1,0 +1,12 @@
+# Build context for src/python-api/Dockerfile is the repo root, so trim it down
+# to what the Dockerfile actually COPYs. Without this the daemon would ship
+# infra/node_modules and build/ (tens of MB) on every build.
+.git
+.idea
+build
+**/node_modules
+**/bin
+**/obj
+**/.venv
+**/__pycache__
+*.zip

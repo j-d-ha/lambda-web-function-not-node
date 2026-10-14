@@ -100,17 +100,18 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
 
 - The .NET NativeAOT publish runs in a `linux/arm64` SDK container
   ([`src/DotnetApiAot/Dockerfile.aot`](src/DotnetApiAot/Dockerfile.aot)) because
-  macOS can't link a Linux arm64 native binary. You need Docker for this step.
+  macOS can't link a Linux arm64 native binary. You need Docker for this step,
+  and for the Python one.
 - The Go, .NET and Node zips put the shim and the binary in the zip root (via
   `zip -j`), because the shim hardcodes `/var/task/server`.
 - The Python build is a real [uv](https://docs.astral.sh/uv/) project
-  (`pyproject.toml` + `uv.lock`). The build exports that one lock and installs
-  it for the target platform with
-  `uv pip install --python-platform aarch64-unknown-linux-gnu --require-hashes`,
-  then downloads a `linux/arm64` CPython from
-  [python-build-standalone](https://github.com/astral-sh/python-build-standalone).
-  It needs network access and the uv CLI. The zip is ~36 MB zipped / ~98 MB
-  unzipped.
+  (`pyproject.toml` + `uv.lock` + `.python-version`) built by
+  [`src/python-api/Dockerfile`](src/python-api/Dockerfile) on `linux/arm64`.
+  Everything happens in the container — uv installs the pinned interpreter, the
+  locked dependencies, the unit test runs, then the bundle is laid out as
+  Lambda sees it and smoked before being zipped. Docker's layer cache holds the
+  interpreter and dependency layers, and only the zip is exported. You need
+  Docker and network access. The zip is ~18 MB zipped / ~52 MB unzipped.
 
 ## Deploy
 
@@ -129,9 +130,13 @@ and a region where Web Functions are available.
 ```sh
 (cd src/go-api && go test ./...)
 (cd src/python-api && uv run python -m unittest)
-task test:python-api   # also runs the built zip on linux/arm64 (needs Docker)
 (cd infra && npm test)
 ```
+
+The Python test also runs inside `task build:python-api`, which additionally
+boots the assembled bundle on `linux/arm64` and checks `/health` before it zips
+it — the bundle only runs on the target architecture, so that is where the
+interpreter and wheels are actually exercised.
 
 ## Docs
 
