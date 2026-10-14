@@ -9,10 +9,16 @@ server-rendered page plus a WebAssembly client instead of a JSON API.
 Two projects, because a Blazor Web App with WebAssembly interactivity is two
 apps that ship together:
 
-- `src/BlazorApp/` — the server. ASP.NET Core host, static server-side
+- `src/blazor/BlazorApp/` — the server. ASP.NET Core host, static server-side
   rendering (static SSR), the `/api/hello` endpoint, and the `/ready` callback.
-- `src/BlazorApp.Client/` — the WebAssembly client. Runs in the browser, calls
-  `/api/hello` on its own origin.
+- `src/blazor/BlazorApp.Client/` — the WebAssembly client. Runs in the browser,
+  calls `/api/hello` on its own origin.
+
+Both sit under `src/blazor/` because they are one deliverable: one zip, one Web
+Function. They are siblings rather than nested because the server project's
+globs would otherwise compile the client's `Program.cs` as its own, and the two
+build against different SDKs (`Microsoft.NET.Sdk.Web` for a `linux-arm64`
+binary, `Microsoft.NET.Sdk.BlazorWebAssembly` for `.wasm`).
 
 Web Functions only boot Node.js, so the zip holds the shared execve shim from
 `src/node-wrapper/` as `index.js`, the apphost `server`, and the whole .NET
@@ -109,17 +115,17 @@ than in the project file keeps local WebAssembly debugging working.
 
 ## Layout
 
-- `src/BlazorApp/Program.cs` — host, endpoints, and the `/ready` POST. No
+- `src/blazor/BlazorApp/Program.cs` — host, endpoints, and the `/ready` POST. No
   `UseHttpsRedirection`/`UseHsts`: the endpoint is HTTPS-only and terminates TLS
   in front of the app, which only ever sees plain HTTP.
-- `src/BlazorApp/Components/Pages/Home.razor` — the page. Static SSR, so the
+- `src/blazor/BlazorApp/Components/Pages/Home.razor` — the page. Static SSR, so the
   values under "Rendered on the server" were produced by the Web Function.
-- `src/BlazorApp.Client/Pages/BackendProbe.razor` — the interactive component.
+- `src/blazor/BlazorApp.Client/Pages/BackendProbe.razor` — the interactive component.
   Prerendering is **off** on purpose (`prerender: false`): with it on,
   `OnInitializedAsync` also runs on the server, where no `HttpClient` is
   registered for the client project. Off, every call is unambiguously a
   browser → Web Function round trip.
-- `src/BlazorApp.Client/HelloResponse.cs` — the `/api/hello` contract, shared by
+- `src/blazor/BlazorApp.Client/HelloResponse.cs` — the `/api/hello` contract, shared by
   both sides. It lives in the client project because the server already
   references it.
 - `wwwroot/app.css` — hand-written. No Bootstrap, no npm, no CDN: this repo runs
@@ -131,7 +137,7 @@ than in the project file keeps local WebAssembly debugging working.
 
 ## Run
 
-- `dotnet run --project src/BlazorApp` runs it locally. It reads
+- `dotnet run --project src/blazor/BlazorApp` runs it locally. It reads
   `AWS_LAMBDA_HTTP_ENDPOINT` (default: Kestrel's) and, with no
   `AWS_LAMBDA_RUNTIME_API`, skips the `/ready` call.
 - `task build:blazor` / `task build:blazor-aot` build the zips with

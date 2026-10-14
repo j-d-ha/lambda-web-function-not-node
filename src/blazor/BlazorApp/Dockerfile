@@ -29,8 +29,8 @@ WORKDIR /work
 # Copy it so the container build sees the same LangVersion and warning policy
 # as a local one.
 COPY Directory.Build.props ./
-COPY src/BlazorApp/ ./src/BlazorApp/
-COPY src/BlazorApp.Client/ ./src/BlazorApp.Client/
+COPY src/blazor/BlazorApp/ ./src/blazor/BlazorApp/
+COPY src/blazor/BlazorApp.Client/ ./src/blazor/BlazorApp.Client/
 
 # Publishing a Blazor WebAssembly client runs the IL linker, which lives in the
 # wasm-tools workload; AOT needs the same workload.
@@ -44,7 +44,7 @@ RUN dotnet workload install wasm-tools
 # (Roslyn) that the WebAssembly.Server package otherwise copies into every
 # output. It is debugger tooling with no runtime role, so it is set here rather
 # than in the project file, where it would break local debugging.
-RUN dotnet publish src/BlazorApp/BlazorApp.csproj -c Release -r linux-arm64 \
+RUN dotnet publish src/blazor/BlazorApp/BlazorApp.csproj -c Release -r linux-arm64 \
         --self-contained true -o /var/task --nologo \
         -p:BlazorWebAssemblyOmitDebugProxyOutput=true \
         -p:RunAOTCompilation=${AOT} -p:WasmStripILAfterAOT=${STRIP_IL}
@@ -53,7 +53,7 @@ RUN dotnet publish src/BlazorApp/BlazorApp.csproj -c Release -r linux-arm64 \
 # publish just wrote lands beside it in the zip root.
 COPY src/node-wrapper/index.js /var/task/index.js
 
-RUN /work/src/BlazorApp/smoke.sh /var/task
+RUN /work/src/blazor/BlazorApp/smoke.sh /var/task
 RUN mkdir -p /out && cd /var/task && zip -q9r "/out/${ZIP_NAME}" .
 
 # The zip is the only artifact; --output type=local copies it straight out.

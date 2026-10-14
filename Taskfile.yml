@@ -82,7 +82,7 @@ tasks:
       # WebAssembly client bundle differs. Needs Docker and network access (the
       # build installs the wasm-tools workload).
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/blazor-web.zip'
-      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' --build-arg ZIP_NAME=blazor-web.zip -f '{{.ROOT_DIR}}/src/BlazorApp/Dockerfile' '{{.ROOT_DIR}}'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' --build-arg ZIP_NAME=blazor-web.zip -f '{{.ROOT_DIR}}/src/blazor/BlazorApp/Dockerfile' '{{.ROOT_DIR}}'
 
   build:blazor-aot:
     desc: Build the Blazor Web App (AOT-compiled WebAssembly) into build/blazor-aot-web.zip
@@ -90,7 +90,7 @@ tasks:
       # RunAOTCompilation + WasmStripILAfterAOT: a much larger client bundle for
       # faster execution in the browser. Same server, same source.
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/blazor-aot-web.zip'
-      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' --build-arg ZIP_NAME=blazor-aot-web.zip --build-arg AOT=true --build-arg STRIP_IL=true -f '{{.ROOT_DIR}}/src/BlazorApp/Dockerfile' '{{.ROOT_DIR}}'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' --build-arg ZIP_NAME=blazor-aot-web.zip --build-arg AOT=true --build-arg STRIP_IL=true -f '{{.ROOT_DIR}}/src/blazor/BlazorApp/Dockerfile' '{{.ROOT_DIR}}'
 
   build:python-api:
     desc: Build FastAPI + a bundled CPython into build/python-api.zip (needs Docker)

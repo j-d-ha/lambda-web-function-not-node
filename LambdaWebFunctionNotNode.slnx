@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src\BlazorApp\BlazorApp.csproj"/>
-    <Project Path="src\BlazorApp.Client\BlazorApp.Client.csproj"/>
+    <Project Path="src\blazor\BlazorApp\BlazorApp.csproj"/>
+    <Project Path="src\blazor\BlazorApp.Client\BlazorApp.Client.csproj"/>
     <Project Path="src\DotnetApi\DotnetApi.csproj"/>
     <Project Path="src\DotnetApiAot\DotnetApiAot.csproj"/>
   </Folder>

@@ -69,7 +69,7 @@ export class InfraStack extends cdk.Stack {
       {
         // A Blazor Web App on the shared shim: static server-side rendering
         // plus a WebAssembly client that calls back into this same function.
-        // The server project is untrimmed (see src/BlazorApp), so this is the
+        // The server project is untrimmed (see src/blazor/BlazorApp), so this is the
         // dotnet-api-class zip; the WebAssembly client bundle is trimmed by the
         // Blazor SDK on its own.
         id: "BlazorWebFunction",

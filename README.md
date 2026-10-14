@@ -12,14 +12,14 @@ all answer the same request, five of which run no Node at request time at all.
 Every backend listens on the port in `AWS_LAMBDA_HTTP_ENDPOINT`, and answers
 `GET /health` with the same payload shape, naming itself:
 
-| Backend                            | Directory          | Response                                 |
-| ---------------------------------- | ------------------ | ---------------------------------------- |
-| Node.js (reference)                | `src/node-api`     | `{"status":"Ok","backend":"node"}`       |
-| Go                                 | `src/go-api`       | `{"status":"Ok","backend":"go"}`         |
-| ASP.NET (NativeAOT, trimmed)       | `src/DotnetApiAot` | `{"status":"OK","backend":"dotnet-aot"}` |
-| ASP.NET (.NET runtime, reflection) | `src/DotnetApi`    | `{"status":"Ok","backend":"dotnet"}`     |
-| Blazor Web App (server + WASM)     | `src/BlazorApp`    | `{"status":"Ok","backend":"blazor"}`     |
-| Python (FastAPI)                   | `src/python-api`   | `{"status":"Ok","backend":"python"}`     |
+| Backend                            | Directory              | Response                                 |
+| ---------------------------------- | ---------------------- | ---------------------------------------- |
+| Node.js (reference)                | `src/node-api`         | `{"status":"Ok","backend":"node"}`       |
+| Go                                 | `src/go-api`           | `{"status":"Ok","backend":"go"}`         |
+| ASP.NET (NativeAOT, trimmed)       | `src/DotnetApiAot`     | `{"status":"OK","backend":"dotnet-aot"}` |
+| ASP.NET (.NET runtime, reflection) | `src/DotnetApi`        | `{"status":"Ok","backend":"dotnet"}`     |
+| Blazor Web App (server + WASM)     | `src/blazor/BlazorApp` | `{"status":"Ok","backend":"blazor"}`     |
+| Python (FastAPI)                   | `src/python-api`       | `{"status":"Ok","backend":"python"}`     |
 
 Blazor is the only one that serves a user interface as well as JSON — and the
 only one built twice, as an interpreted and an AOT-compiled WebAssembly client
@@ -82,10 +82,11 @@ the reference consumer.
 
 ## Blazor
 
-`src/BlazorApp` is a [Blazor Web App](https://learn.microsoft.com/aspnet/core/blazor/)
-on the same shim, as two projects: the server (`src/BlazorApp`) and the
-WebAssembly client (`src/BlazorApp.Client`). It is the only backend here that
-serves a page, not just JSON.
+`src/blazor/` holds a [Blazor Web App](https://learn.microsoft.com/aspnet/core/blazor/)
+on the same shim, as two sibling projects: `BlazorApp/` (the server) and
+`BlazorApp.Client/` (the WebAssembly half that runs in the browser). They are one
+deliverable — one zip, one Web Function — and the folder keeps that obvious. It
+is the only backend here that serves a page, not just JSON.
 
 It uses the two render modes that are plain HTTP — **static SSR** for the page
 shell and **Interactive WebAssembly** for the component that calls the backend.
@@ -96,7 +97,7 @@ WebAssembly running in your browser.
 
 It deliberately does **not** use Interactive Server or Interactive Auto. Those
 hold a SignalR circuit open over a WebSocket, and Web Functions do not support
-WebSocket upgrades. See [`src/BlazorApp/AGENTS.md`](src/BlazorApp/AGENTS.md) for
+WebSocket upgrades. See [`src/blazor/BlazorApp/AGENTS.md`](src/blazor/BlazorApp/AGENTS.md) for
 the details and the deployment targets that do fit.
 
 `task build` produces two zips from that one source:
@@ -118,8 +119,8 @@ src/node-api/       Hono app on @hono/node-server (the Node baseline)
 src/go-api/         Go net/http server + the shared shim in its zip
 src/DotnetApiAot/   ASP.NET minimal API, NativeAOT-published (small, no reflection)
 src/DotnetApi/      ASP.NET minimal API, self-contained + untrimmed (reflection)
-src/BlazorApp/      Blazor Web App server: static SSR + the /api/hello endpoint
-src/BlazorApp.Client/  the WebAssembly half of that app (runs in the browser)
+src/blazor/         the Blazor Web App, as two projects: BlazorApp/ (the server:
+                    static SSR + /api/hello) and BlazorApp.Client/ (the WASM half)
 src/python-api/     FastAPI app, shipped with a bundled CPython interpreter
 src/node-wrapper/   the execve shim every non-Node backend zips in as index.js
 infra/              AWS CDK app: a WebFunction L2 construct + the stack
@@ -156,7 +157,7 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   ships is the one that was exercised. Reflection means no trimming and no AOT,
   so this zip carries the whole .NET runtime: ~115 MB unzipped / ~45 MB zipped,
   against ~10 MB for the NativeAOT build.
-- The **Blazor** build ([`src/BlazorApp/Dockerfile`](src/BlazorApp/Dockerfile))
+- The **Blazor** build ([`src/blazor/BlazorApp/Dockerfile`](src/blazor/BlazorApp/Dockerfile))
   also runs on `linux/arm64`, and installs the `wasm-tools` workload inside the
   image: publishing a Blazor WebAssembly client IL-links the runtime, and the
   AOT variant compiles it through Emscripten (which needs the `python3` the
@@ -200,7 +201,7 @@ boots the assembled bundle on `linux/arm64` and checks `/health` before it zips
 it — the bundle only runs on the target architecture, so that is where the
 interpreter and wheels are actually exercised. `task build:dotnet-api` does the
 same for the managed .NET build: `src/DotnetApi/smoke.sh` boots the published
-bundle and checks `/health` before the zip is written. `src/BlazorApp/smoke.sh`
+bundle and checks `/health` before the zip is written. `src/blazor/BlazorApp/smoke.sh`
 goes further for the Blazor builds: it checks that the home page actually
 renders, that `/api/hello` answers, and that the WebAssembly bundle shipped.
 
