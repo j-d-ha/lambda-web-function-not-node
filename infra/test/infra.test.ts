@@ -26,4 +26,15 @@ test("InfraStack creates the web function stack with an endpoint output", () => 
     AuthType: "IamAuth",
   });
   template.hasOutput("EndpointUrl", {});
-});
+
+  // One shared, versioned code bucket that the revision pins into.
+  template.hasResourceProperties("AWS::S3::Bucket", {
+    VersioningConfiguration: { Status: "Enabled" },
+  });
+  const revision = Object.values(
+    template.findResources("AWS::Lambda::WebFunctionRevision"),
+  )[0].Properties;
+  expect(revision.BuildConfig.CodeConfig.S3Object.Bucket).toEqual({
+    Ref: expect.any(String),
+  });
+};);

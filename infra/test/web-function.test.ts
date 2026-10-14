@@ -1,5 +1,12 @@
-import { App, Duration, Stack, Validations } from "aws-cdk-lib/core";
-import { Template } from "aws-cdk-lib/assertions";
+import {
+  App,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  Validations,
+} from "aws-cdk-lib/core";
+import { RetentionDays } from "aws-cdk-lib/aws-logs";
+import { Match, Template } from "aws-cdk-lib/assertions";
 import { WebFunction, WebFunctionEndpointType } from "../lib/web-function";
 import { join } from "path";
 
@@ -37,6 +44,95 @@ test("creates function, revision, endpoint in order", () => {
     EndpointType: "HomeRegion",
     AuthType: "IamAuth",
     RevisionWeights: [{ Weight: 100 }],
+  });
+});
+
+test("declares the function log group and deletes it with the stack", () => {
+  const template = Template.fromStack(makeStack());
+
+  const group = Object.values(
+    template.findResources("AWS::Logs::LogGroup"),
+  ).find((r) => r.Properties?.LogGroupName === "/aws/lambda/test-web-fn");
+  expect(group).toBeDefined();
+  expect(group!.DeletionPolicy).toEqual("Delete");
+
+  const revision = Object.values(
+    template.findResources("AWS::Lambda::WebFunctionRevision"),
+  )[0].Properties;
+  expect(revision.ServiceConfig.TelemetryConfig.LoggingConfig).toEqual({
+    LogGroup: "/aws/lambda/test-web-fn",
+  });
+});
+
+test("log group props override name, retention, and removal policy", () => {
+  const app = new App();
+  Validations.of(app).acknowledge({
+    id: "CloudFormation-Validate::F3006",
+    reason:
+      "Lambda Web Function resource types are newer than this CDK release",
+  });
+  const stack = new Stack(app, "TestStack");
+  new WebFunction(stack, "WebFunction", {
+    functionName: "test-web-fn",
+    sourcePath: join(__dirname, "..", "..", "src", "node-api", "dist"),
+    logGroupName: "/app/custom-logs",
+    logRetention: RetentionDays.ONE_WEEK,
+    logRemovalPolicy: RemovalPolicy.RETAIN,
+  });
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties("AWS::Logs::LogGroup", {
+    LogGroupName: "/app/custom-logs",
+    RetentionInDays: 7,
+  });
+  const group = Object.values(
+    template.findResources("AWS::Logs::LogGroup"),
+  ).find((r) => r.Properties?.LogGroupName === "/app/custom-logs");
+  expect(group!.DeletionPolicy).not.toEqual("Delete"); // RETAIN
+
+  // A custom name needs an explicit grant, and the revision points at it.
+  template.hasResourceProperties("AWS::IAM::Policy", {
+    PolicyDocument: {
+      Statement: Match.arrayWith([
+        Match.objectLike({ Action: Match.arrayWith(["logs:PutLogEvents"]) }),
+      ]),
+    },
+  });
+  const revision = Object.values(
+    template.findResources("AWS::Lambda::WebFunctionRevision"),
+  )[0].Properties;
+  expect(revision.ServiceConfig.TelemetryConfig.LoggingConfig).toEqual({
+    LogGroup: "/app/custom-logs",
+  });
+});
+
+test("passes through env vars, tags, KMS key, and endpoint description", () => {
+  const app = new App();
+  Validations.of(app).acknowledge({
+    id: "CloudFormation-Validate::F3006",
+    reason:
+      "Lambda Web Function resource types are newer than this CDK release",
+  });
+  const stack = new Stack(app, "TestStack");
+  new WebFunction(stack, "WebFunction", {
+    functionName: "test-web-fn",
+    sourcePath: join(__dirname, "..", "..", "src", "node-api", "dist"),
+    environmentVariables: { FOO: "bar" },
+    tags: [{ key: "Team", value: "core" }],
+    kmsKeyArn: "arn:aws:kms:us-east-1:123456789012:key/abc",
+    endpointDescription: "public api",
+  });
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties("AWS::Lambda::WebFunction", {
+    Tags: [{ Key: "Team", Value: "core" }],
+  });
+  template.hasResourceProperties("AWS::Lambda::WebFunctionRevision", {
+    KmsKeyArn: "arn:aws:kms:us-east-1:123456789012:key/abc",
+    ServiceConfig: { EnvironmentVariables: { FOO: "bar" } },
+  });
+  template.hasResourceProperties("AWS::Lambda::WebFunctionEndpoint", {
+    Description: "public api",
   });
 });
 
@@ -114,6 +210,15 @@ test("unsupported prop values fail at synth, not deploy", () => {
   expect(
     () =>
       new WebFunction(new Stack(app, "T2"), "WebFunction", {
+        functionName: "test-web-fn",
+        sourcePath: src,
+        timeout: Duration.seconds(1),
+      }),
+  ).toThrow(/3-900s/);
+
+  expect(
+    () =>
+      new WebFunction(new Stack(app, "T2b"), "WebFunction", {
         functionName: "test-web-fn",
         sourcePath: src,
         maxConcurrencyPerEnvironment: 200,

@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { Duration, Fn, RemovalPolicy, Token } from "aws-cdk-lib";
+import { CfnTag, Duration, Fn, RemovalPolicy, Token } from "aws-cdk-lib";
 import {
   CfnWebFunction,
   CfnWebFunctionRevision,
@@ -8,6 +8,7 @@ import {
 import { Bucket, CfnBucket } from "aws-cdk-lib/aws-s3";
 import { BucketDeployment, Source } from "aws-cdk-lib/aws-s3-deployment";
 import { Role, ServicePrincipal, ManagedPolicy } from "aws-cdk-lib/aws-iam";
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 
 /**
  * Runtimes Lambda Web Functions support.
@@ -48,7 +49,10 @@ export interface WebFunctionProps {
   /** Unique function name across all Regions in the account (max 64 chars). */
   readonly functionName: string;
 
-  /** Path to the app code directory. Zipped and uploaded to S3 as-is. */
+  /**
+   * Path to the app code. Either a directory (zipped and uploaded) or a
+   * pre-built `.zip` artifact (uploaded as-is).
+   */
   readonly sourcePath: string;
 
   /** Runtime for the revision. Web Functions currently only support Node.js. */
@@ -70,10 +74,14 @@ export interface WebFunctionProps {
   /** Endpoint name. Default "default". */
   readonly endpointName?: string;
 
-  /** Per-request timeout. Default 30s, max 900s. */
+  /** Per-request timeout. Default 30s; allowed 3–900s. */
   readonly timeout?: Duration;
 
-  /** Max concurrent requests per execution environment (1–128). */
+  /**
+   * Max concurrent requests per execution environment (1–128). Default 64
+   * (AWS default). Lower it to bound in-flight work per process; extra load
+   * spreads across more environments instead.
+   */
   readonly maxConcurrencyPerEnvironment?: number;
 
   /** Cap on concurrent execution environments for the endpoint. */
@@ -88,8 +96,32 @@ export interface WebFunctionProps {
   /** Optional code bucket; one is created (versioned, DESTROY) if omitted. */
   readonly codeBucket?: Bucket;
 
+  /** Runtime environment variables for the revision. */
+  readonly environmentVariables?: Record<string, string>;
+
+  /** KMS key ARN used to encrypt the revision. Default: AWS-managed key. */
+  readonly kmsKeyArn?: string;
+
+  /** Tags applied to the web function. */
+  readonly tags?: Array<CfnTag>;
+
   /** Optional description for the revision. */
   readonly description?: string;
+
+  /** Optional description for the endpoint. */
+  readonly endpointDescription?: string;
+
+  /** Log group name. Default `/aws/lambda/<functionName>`. */
+  readonly logGroupName?: string;
+
+  /** Log retention. Defaults to never expiring. */
+  readonly logRetention?: RetentionDays;
+
+  /**
+   * Log group removal policy. Defaults to DESTROY — logs go away with the
+   * stack. Set RETAIN to keep them.
+   */
+  readonly logRemovalPolicy?: RemovalPolicy;
 }
 
 export class WebFunction extends Construct {
@@ -103,6 +135,8 @@ export class WebFunction extends Construct {
   public readonly bucket: Bucket;
   /** The execution role. */
   public readonly role: Role;
+  /** The function's CloudWatch log group. */
+  public readonly logGroup: LogGroup;
 
   constructor(scope: Construct, id: string, props: WebFunctionProps) {
     super(scope, id);
@@ -119,9 +153,13 @@ export class WebFunction extends Construct {
         `${endpointType} endpoints require at least one additional region in props.regions`,
       );
     }
-    if (props.timeout && props.timeout.toSeconds() > 900) {
+    const timeoutSeconds = props.timeout?.toSeconds();
+    if (
+      timeoutSeconds !== undefined &&
+      (timeoutSeconds < 3 || timeoutSeconds > 900)
+    ) {
       throw new Error(
-        `timeout ${props.timeout.toSeconds()}s exceeds the 900s web function maximum`,
+        `timeout ${timeoutSeconds}s is outside the 3-900s web function range`,
       );
     }
     if (
@@ -188,7 +226,23 @@ export class WebFunction extends Construct {
         ],
       });
 
-    // 3. Zip the source dir and upload as a single unextracted object.
+    // 3. Log group. Lambda would auto-create /aws/lambda/<functionName> (and
+    //    never delete it), so we declare it instead and default it to DESTROY,
+    //    tying it to the stack lifecycle.
+    const logGroupName =
+      props.logGroupName ?? `/aws/lambda/${props.functionName}`;
+    this.logGroup = new LogGroup(this, "LogGroup", {
+      logGroupName,
+      retention: props.logRetention,
+      removalPolicy: props.logRemovalPolicy ?? RemovalPolicy.DESTROY,
+    });
+    // The basic execution managed policy only covers /aws/lambda/*; a custom
+    // name needs an explicit grant or the function can't write logs.
+    if (logGroupName !== `/aws/lambda/${props.functionName}`) {
+      this.logGroup.grantWrite(this.role);
+    }
+
+    // 4. Zip the source dir and upload as a single unextracted object.
     //    extract: false keeps the zip 1:1, which is what the revision wants.
     const deployment = new BucketDeployment(this, "CodeDeployment", {
       sources: [Source.asset(props.sourcePath)],
@@ -196,12 +250,13 @@ export class WebFunction extends Construct {
       extract: false,
     });
 
-    // 4. The web function itself — just a name.
+    // 5. The web function itself — just a name.
     this.function = new CfnWebFunction(this, "Function", {
       functionName: props.functionName,
+      tags: props.tags,
     });
 
-    // 5. The revision pins the exact S3 object version BucketDeployment just
+    // 6. The revision pins the exact S3 object version BucketDeployment just
     //    uploaded — a code change gets a new version, so a redeploy is picked
     //    up even under the same key.
     this.revision = new CfnWebFunctionRevision(this, "Revision", {
@@ -222,18 +277,26 @@ export class WebFunction extends Construct {
         executionRoleArn: this.role.roleArn,
         timeoutSeconds: (props.timeout ?? Duration.seconds(30)).toSeconds(),
         maxConcurrencyPerEnvironment: props.maxConcurrencyPerEnvironment,
+        environmentVariables: props.environmentVariables,
+        // Point the revision at our group explicitly rather than relying on
+        // the name matching Lambda's default.
+        telemetryConfig: {
+          loggingConfig: { logGroup: logGroupName },
+        },
       },
       description: props.description,
+      kmsKeyArn: props.kmsKeyArn,
     });
 
     // Cfn ordering: the revision needs the function to exist first.
     this.revision.addResourceDependency(this.function);
 
-    // 6. The HTTPS endpoint, weighted 100% to this revision.
+    // 7. The HTTPS endpoint, weighted 100% to this revision.
     this.endpoint = new CfnWebFunctionEndpoint(this, "Endpoint", {
       functionName: props.functionName, // bare name, never an ARN
       endpointName: props.endpointName ?? "default",
       endpointType,
+      description: props.endpointDescription,
       regions: props.regions,
       authType: props.authType ?? WebFunctionAuthType.IAM_AUTH, // public by accident is the bad default
       revisionWeights: [

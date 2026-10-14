@@ -4,8 +4,31 @@ version: '3'
 
 vars:
   GREETING: Hello, world!
+  BUILD_DIR: build
 
 tasks:
   format:
     desc: Format files in the repository
     cmd: format files $(git ls-files -co --exclude-standard)
+
+  build:
+    desc: Build every app artifact into build/
+    deps:
+      - build:node-api
+
+  build:node-api:
+    desc: Bundle the Node API into build/node-api.zip
+    dir: src/node-api
+    cmds:
+      - npm run build
+      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}'
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/node-api.zip'
+      - cd dist && zip -qr '{{.ROOT_DIR}}/{{.BUILD_DIR}}/node-api.zip' .
+
+  deploy:
+    desc: Deploy the CDK stack (builds artifacts first). Extra args via `task deploy -- ...`
+    dir: infra
+    deps:
+      - build
+    cmds:
+      - npx cdk deploy {{.CLI_ARGS}}
