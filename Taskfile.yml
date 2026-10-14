@@ -5,6 +5,11 @@ version: '3'
 vars:
   GREETING: Hello, world!
   BUILD_DIR: build
+  # Shared execve shim every non-Node backend zips in as index.js.
+  NODE_WRAPPER: src/node-wrapper/index.js
+  # Web Functions are arm64 only (Graviton).
+  GOOS: linux
+  GOARCH: arm64
 
 tasks:
   format:
@@ -15,6 +20,7 @@ tasks:
     desc: Build every app artifact into build/
     deps:
       - build:node-api
+      - build:go-api
 
   build:node-api:
     desc: Bundle the Node API into build/node-api.zip
@@ -24,6 +30,19 @@ tasks:
       - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}'
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/node-api.zip'
       - cd dist && zip -qr '{{.ROOT_DIR}}/{{.BUILD_DIR}}/node-api.zip' .
+
+  build:go-api:
+    desc: Cross-compile and bundle the Go API into build/go-api.zip
+    dir: src/go-api
+    cmds:
+      # Build the binary into build/ and zip it flat with the shared wrapper, so
+      # no staging copy of either is left in build/.
+      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}'
+      - CGO_ENABLED=0 GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -trimpath -o '{{.ROOT_DIR}}/{{.BUILD_DIR}}/server' .
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/go-api.zip'
+      # zip -j jams paths, so the wrapper lands in the zip root as index.js.
+      - zip -jq '{{.ROOT_DIR}}/{{.BUILD_DIR}}/go-api.zip' '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/server'
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/server'
 
   deploy:
     desc: Deploy the CDK stack (builds artifacts first). Extra args via `task deploy -- ...`

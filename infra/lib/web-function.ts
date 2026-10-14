@@ -250,10 +250,13 @@ export class WebFunction extends Construct {
 
     // 4. Zip the source dir and upload as a single unextracted object.
     //    extract: false keeps the zip 1:1, which is what the revision wants.
+    //    prune: false because every web function shares one code bucket —
+    //    pruning would delete the other functions' zips.
     const deployment = new BucketDeployment(this, "CodeDeployment", {
       sources: [Source.asset(props.sourcePath)],
       destinationBucket: this.bucket,
       extract: false,
+      prune: false,
     });
 
     // 5. The web function itself — just a name.
