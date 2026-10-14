@@ -12,9 +12,8 @@ end_of_line = LF
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.xml]
-indent_size = 4
-max_line_length = 1000
+[*.{xml,props,DotSettings}]
+max_line_length = 350
 
 [docs/**]
 ij_formatter_enabled = false
