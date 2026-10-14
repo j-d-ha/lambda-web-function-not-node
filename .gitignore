@@ -84,6 +84,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+### Python stuff
+
+__pycache__/
+*.py[cod]
+
 # misc
 .DS_Store
 

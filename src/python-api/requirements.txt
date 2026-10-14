@@ -1,0 +1,6 @@
+# Resolved for linux/arm64 (Web Functions are Arm64 only) by the build task's
+# `uv pip install --python-platform aarch64-unknown-linux-gnu`. Plain uvicorn,
+# not uvicorn[standard]: no uvloop/httptools, so no extra native wheels to keep
+# in step with the bundled interpreter.
+fastapi==0.143.1
+uvicorn==0.54.0
