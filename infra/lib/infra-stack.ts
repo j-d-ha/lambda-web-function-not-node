@@ -38,6 +38,14 @@ export class InfraStack extends cdk.Stack {
         sourcePath: "../build/go-api.zip",
         outputId: "GoEndpointUrl",
       },
+      {
+        // Same shared shim; the published binary is a NativeAOT build, so
+        // there is no dotnet runtime in the environment either.
+        id: "DotnetWebFunction",
+        functionName: "dotnet-api-web",
+        sourcePath: "../build/dotnet-api.zip",
+        outputId: "DotnetEndpointUrl",
+      },
     ];
 
     for (const backend of backends) {

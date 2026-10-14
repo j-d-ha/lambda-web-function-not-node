@@ -1,0 +1,8 @@
+# The linux-arm64 NativeAOT publish needs a Linux sysroot (crt objects, libc,
+# libgcc) that macOS can't provide, so it runs here instead of cross-linking.
+# Baked into an image so repeat builds skip the apt step.
+FROM mcr.microsoft.com/dotnet/sdk:11.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends clang binutils zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
