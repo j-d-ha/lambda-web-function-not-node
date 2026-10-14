@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+vars:
+  GREETING: Hello, world!
+  BUILD_DIR: build
+  # Shared execve shim every non-Node backend zips in as index.js.
+  NODE_WRAPPER: src/node-wrapper/index.js
+  # Web Functions are arm64 only (Graviton).
+  GOOS: linux
+  GOARCH: arm64
+
+tasks:
+  format:
+    desc: Format files in the repository
+    cmd: format files $(git ls-files -co --exclude-standard)
+
+  build:
+    desc: Build every app artifact into build/
+    deps:
+      - build:node-api
+      - build:go-api
+      - build:dotnet-api
+
+  build:node-api:
+    desc: Bundle the Node API into build/node-api.zip
+    dir: src/node-api
+    cmds:
+      - npm run build
+      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}'
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/node-api.zip'
+      - cd dist && zip -qr '{{.ROOT_DIR}}/{{.BUILD_DIR}}/node-api.zip' .
+
+  build:go-api:
+    desc: Cross-compile and bundle the Go API into build/go-api.zip
+    dir: src/go-api
+    cmds:
+      # Build the binary into build/ and zip it flat with the shared wrapper, so
+      # no staging copy of either is left in build/.
+      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}'
+      - CGO_ENABLED=0 GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -trimpath -o '{{.ROOT_DIR}}/{{.BUILD_DIR}}/server' .
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/go-api.zip'
+      # zip -j jams paths, so the wrapper lands in the zip root as index.js.
+      - zip -jq '{{.ROOT_DIR}}/{{.BUILD_DIR}}/go-api.zip' '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/server'
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/server'
+
+  build:dotnet-api:
+    desc: Publish the ASP.NET NativeAOT API and bundle it into build/dotnet-api.zip
+    cmds:
+      # NativeAOT can't link a linux-arm64 binary on macOS (no Linux sysroot),
+      # so the publish runs in a linux/arm64 SDK container. AssemblyName=server
+      # so the native binary matches the wrapper's contract.
+      - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api'
+      - mkdir -p '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api'
+      - docker build -q -t dotnet-api-aot -f '{{.ROOT_DIR}}/src/DotnetApiAot/Dockerfile.aot' '{{.ROOT_DIR}}/src/DotnetApiAot'
+      - docker run --rm --platform linux/arm64 -u "$(id -u):$(id -g)" -e HOME=/tmp -v '{{.ROOT_DIR}}:/work' -w /work dotnet-api-aot dotnet publish src/DotnetApiAot/DotnetApiAot.csproj -c Release -r {{.GOOS}}-{{.GOARCH}} -p:AssemblyName=server -o build/dotnet-api --nologo
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api.zip'
+      - zip -jq '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api.zip' '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api/server' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api/appsettings.json'
+      - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-api'
+
+  deploy:
+    desc: Deploy the CDK stack (builds artifacts first). Extra args via `task deploy -- ...`
+    dir: infra
+    deps:
+      - build
+    cmds:
+      - npx cdk deploy {{.CLI_ARGS}}

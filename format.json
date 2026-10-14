@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/j-d-ha/format/main/format.schema.json",
+  "version": 1,
+  "formatters": [
+    {
+      "name": "dotnet cleanupcode",
+      "patterns": ["**/*.cs", "**/*.csx", "**/*.csproj", "**/*.props"],
+      "command": [
+        "dotnet",
+        "tool",
+        "run",
+        "jb",
+        "cleanupcode",
+        "--profile=Built-in: Reformat & Apply Syntax Style",
+        "--include=$FILES",
+        "--settings=$GLOB_FIRST_BASENAME(*.DotSettings)",
+        "--verbosity=FATAL"
+      ],
+      "filesDelimiter": ";"
+    },
+    {
+      "name": "mdformat github markdown",
+      "patterns": ["**/*.md"],
+      "exclude": [".agents/**"],
+      "command": [
+        "uvx",
+        "--with=mdformat-gfm",
+        "--with=mdformat-front-matters",
+        "--with=mdformat-tables",
+        "mdformat",
+        "--number",
+        "$FILES"
+      ]
+    },
+    {
+      "name": "prettier",
+      "patterns": ["**/*.js", "**/*.ts", "**/*.json", "**/*.html"],
+      "exclude": ["package-lock.json"],
+      "command": ["bunx", "prettier", "--write", "$FILES"]
+    }
+  ]
+}
