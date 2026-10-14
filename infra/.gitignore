@@ -1,0 +1,12 @@
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+
+# Keep infra CDK entrypoints tracked even though bin/ is ignored at repo root
+!bin/
+!bin/**
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
