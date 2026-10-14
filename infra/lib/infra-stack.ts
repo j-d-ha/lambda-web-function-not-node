@@ -1,7 +1,7 @@
 import * as cdk from "aws-cdk-lib/core";
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import { WebFunction } from "./web-function";
+import { WebFunction, WebFunctionAuthType } from "./web-function";
 
 export class InfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -26,6 +26,7 @@ export class InfraStack extends cdk.Stack {
       maxConcurrencyPerEnvironment: 64,
       maxEnvironments: 2,
       rateLimit: 100,
+      authType: WebFunctionAuthType.APPLICATION_MANAGED,
     });
 
     new cdk.CfnOutput(this, "EndpointUrl", { value: webFn.endpointUrl });
