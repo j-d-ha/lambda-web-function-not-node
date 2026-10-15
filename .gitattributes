@@ -1,0 +1,4 @@
+# Gradle's Windows launcher (gradlew.bat) ships with CRLF endings. Left to
+# itself, Git would rewrite them to LF on checkout and then report the file as
+# modified in a fresh clone.
+*.bat text eol=crlf
