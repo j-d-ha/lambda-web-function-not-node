@@ -16,10 +16,23 @@ export class InfraStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Every backend in src/ that ships a deployable artifact, one Web Function
-    // each. `sourcePath` is produced by `task build`; the construct treats a
-    // .zip as a pre-built artifact and uploads it as-is.
-    const backends = [
+    // Every artifact `task build` produces, one Web Function each. `sourcePath`
+    // is that artifact; the construct treats a .zip as pre-built and uploads it
+    // as-is. Two of these come from a single source tree -- src/blazor and
+    // src/java-api are each built twice -- which is why a backend can carry a
+    // `backendName` rather than compiling its own name in.
+    const backends: Array<{
+      id: string;
+      functionName: string;
+      sourcePath: string;
+      outputId: string;
+      /**
+       * What the app reports from GET /health, for the backends that read it
+       * from configuration instead of compiling it in. Revision-level, since
+       * that is where environment variables live.
+       */
+      backendName?: string;
+    }> = [
       {
         // `id` becomes the construct's logical ID. "WebFunction" here is the
         // id the node function was first deployed under; renaming it would
@@ -87,22 +100,26 @@ export class InfraStack extends cdk.Stack {
         outputId: "BlazorAotEndpointUrl",
       },
       {
-        // Spring Boot on the JVM, with a jlink'd JRE carried in the zip (see
-        // src/java-api). The revision still declares nodejs24.x because that is
-        // what boots the shim.
+        // src/java-api built the JVM way: a jlink'd JRE carried in the zip. The
+        // revision still declares nodejs24.x because that is what boots the
+        // shim. The name it reports is set here, not in the code, because the
+        // same source also builds the native function below.
         id: "JavaWebFunction",
         functionName: "java-api-web",
         sourcePath: "../build/java-api.zip",
         outputId: "JavaEndpointUrl",
+        backendName: "java",
       },
       {
-        // The same Spring Boot app compiled by GraalVM native-image, so there
-        // is no JVM in the environment at all. The Java counterpart of the
-        // dotnet / dotnet-aot pair above.
+        // The same src/java-api through Dockerfile.aot: GraalVM native-image,
+        // so there is no JVM in the environment at all. The Java counterpart of
+        // the dotnet / dotnet-aot pair above, differing in packaging where they
+        // differ in code.
         id: "JavaAotWebFunction",
         functionName: "java-aot-api-web",
         sourcePath: "../build/java-aot-api.zip",
         outputId: "JavaAotEndpointUrl",
+        backendName: "java-aot",
       },
       {
         // Kotlin on Ktor, also carrying a jlink'd JRE: a second framework and a
@@ -124,6 +141,11 @@ export class InfraStack extends cdk.Stack {
         maxEnvironments: 2,
         rateLimit: 100,
         authType: WebFunctionAuthType.APPLICATION_MANAGED,
+        // Only the backends that derive their reported name from configuration
+        // get this; the rest compile it in and would ignore it.
+        environmentVariables: backend.backendName
+          ? { BACKEND_NAME: backend.backendName }
+          : undefined,
       });
 
       new cdk.CfnOutput(this, backend.outputId, { value: webFn.endpointUrl });

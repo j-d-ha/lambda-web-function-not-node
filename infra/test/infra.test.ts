@@ -63,6 +63,18 @@ test("InfraStack deploys a web function per backend with an endpoint output", ()
   template.hasOutput("JavaAotEndpointUrl", {});
   template.hasOutput("KotlinEndpointUrl", {});
 
+  // The two Java functions are built from one source, so the name each reports
+  // is revision configuration rather than a literal in the app. Pin it: nothing
+  // else in the repo would notice it going missing.
+  template.hasResourceProperties("AWS::Lambda::WebFunctionRevision", {
+    FunctionName: "java-api-web",
+    ServiceConfig: { EnvironmentVariables: { BACKEND_NAME: "java" } },
+  });
+  template.hasResourceProperties("AWS::Lambda::WebFunctionRevision", {
+    FunctionName: "java-aot-api-web",
+    ServiceConfig: { EnvironmentVariables: { BACKEND_NAME: "java-aot" } },
+  });
+
   // One shared, versioned code bucket that every revision pins into.
   template.hasResourceProperties("AWS::S3::Bucket", {
     VersioningConfiguration: { Status: "Enabled" },

@@ -46,7 +46,7 @@ RUN mkdir -p /var/task \
 # root next to the launcher.
 COPY src/node-wrapper/index.js /var/task/index.js
 
-RUN /work/src/java-api/smoke.sh /var/task
+RUN /work/src/java-api/smoke.sh /var/task java
 RUN cd /var/task && zip -q9r /java-api.zip .
 
 # The zip is the only artifact; --output type=local copies it straight out.

@@ -22,7 +22,7 @@ prerelease is deliberately not used.
 
 One deliberate deviation from the Kotlin default: this builds with **Maven**,
 where a new Kotlin project would normally use Gradle. Maven shares a build tool
-and a base image with `src/java-api` and `src/java-aot-api`, and what is under
+and a base image with `src/java-api`, and what is under
 test here is the execve shim, not the build tool. Kotlin has no objection —
 `kotlin-maven-plugin` is supported and the compiler plugins are the same ones
 Gradle uses — but a reader expecting Gradle should know it was a choice.

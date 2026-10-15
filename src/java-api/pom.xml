@@ -41,6 +41,25 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <!-- Only Dockerfile.aot uses this, and it invokes the goal directly:
+             `mvn -Pnative native:compile`. Deliberately not bound to a phase
+             here, because an execution bound to `package` would run for the JVM
+             build too, which has no native-image and would fail. The parent's
+             `native` profile only *configures* this plugin via pluginManagement,
+             so nothing runs unless it is asked for. -->
+        <groupId>org.graalvm.buildtools</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+        <configuration>
+          <!-- The shim's contract is a binary called `server` in the zip root. -->
+          <imageName>server</imageName>
+          <buildArgs>
+            <!-- java.net.http, used for the /ready POST, needs the plain-HTTP
+                 protocol: GraalVM only ships https, file and jar by default. -->
+            <buildArg>--enable-url-protocols=http</buildArg>
+          </buildArgs>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 </project>
