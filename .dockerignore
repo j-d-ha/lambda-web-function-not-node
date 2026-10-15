@@ -9,4 +9,5 @@ build
 **/obj
 **/.venv
 **/__pycache__
+**/target
 *.zip

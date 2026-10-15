@@ -86,6 +86,32 @@ export class InfraStack extends cdk.Stack {
         sourcePath: "../build/blazor-aot-web.zip",
         outputId: "BlazorAotEndpointUrl",
       },
+      {
+        // Spring Boot on the JVM, with a jlink'd JRE carried in the zip (see
+        // src/java-api). The revision still declares nodejs24.x because that is
+        // what boots the shim.
+        id: "JavaWebFunction",
+        functionName: "java-api-web",
+        sourcePath: "../build/java-api.zip",
+        outputId: "JavaEndpointUrl",
+      },
+      {
+        // The same Spring Boot app compiled by GraalVM native-image, so there
+        // is no JVM in the environment at all. The Java counterpart of the
+        // dotnet / dotnet-aot pair above.
+        id: "JavaAotWebFunction",
+        functionName: "java-aot-api-web",
+        sourcePath: "../build/java-aot-api.zip",
+        outputId: "JavaAotEndpointUrl",
+      },
+      {
+        // Kotlin on Ktor, also carrying a jlink'd JRE: a second framework and a
+        // second build on the same shim, and not Spring.
+        id: "KotlinWebFunction",
+        functionName: "kotlin-api-web",
+        sourcePath: "../build/kotlin-api.zip",
+        outputId: "KotlinEndpointUrl",
+      },
     ];
 
     for (const backend of backends) {

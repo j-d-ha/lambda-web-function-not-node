@@ -6,8 +6,8 @@ even though the managed runtime only boots Node.js.
 Lambda Web Functions are a newer Lambda flavor: you give AWS an HTTP app, point a
 Web Function revision at it, and get an HTTPS endpoint with its own scaling,
 concurrency, and rate-limit controls. The catch is the runtime — a revision's
-`runtime` today only accepts `nodejs24.x`. This repo shows six backends that
-all answer the same request, five of which run no Node at request time at all.
+`runtime` today only accepts `nodejs24.x`. This repo shows nine backends that
+all answer the same request, eight of which run no Node at request time at all.
 
 Every backend listens on the port in `AWS_LAMBDA_HTTP_ENDPOINT`, and answers
 `GET /health` with the same payload shape, naming itself:
@@ -20,6 +20,9 @@ Every backend listens on the port in `AWS_LAMBDA_HTTP_ENDPOINT`, and answers
 | ASP.NET (.NET runtime, reflection) | `src/DotnetApi`        | `{"status":"Ok","backend":"dotnet"}`     |
 | Blazor Web App (server + WASM)     | `src/blazor/BlazorApp` | `{"status":"Ok","backend":"blazor"}`     |
 | Python (FastAPI)                   | `src/python-api`       | `{"status":"Ok","backend":"python"}`     |
+| Java (Spring Boot, JVM)            | `src/java-api`         | `{"status":"Ok","backend":"java"}`       |
+| Java (GraalVM native-image)        | `src/java-aot-api`     | `{"status":"Ok","backend":"java-aot"}`   |
+| Kotlin (Ktor, JVM)                 | `src/kotlin-api`       | `{"status":"Ok","backend":"kotlin"}`     |
 
 Blazor is the only one that serves a user interface as well as JSON — and the
 only one built twice, as an interpreted and an AOT-compiled WebAssembly client
@@ -76,6 +79,16 @@ The non-Node backends follow that contract:
   CPython under `python/`, and `server` is `main.py` with that interpreter on
   its shebang line. It starts uvicorn and signals `/ready` from a thread once
   the server is up.
+- **Java, JVM** ([`src/java-api`](src/java-api)) is Python's shape again, for a
+  managed runtime: a Spring Boot app whose `server` is a `#!/bin/sh` script that
+  execs a `jlink`-trimmed JRE the build carries in the zip.
+- **Java, native** ([`src/java-aot-api`](src/java-aot-api)) is that same app
+  compiled ahead of time by GraalVM `native-image`, so `server` is one binary
+  and no JVM ships at all — the `DotnetApi` / `DotnetApiAot` trade, repeated in
+  a second ecosystem.
+- **Kotlin** ([`src/kotlin-api`](src/kotlin-api)) is the JVM Java backend's
+  shape on a different framework and a different build: Ktor on Netty, packed
+  as a shaded fat jar rather than Spring's repackaged one.
 
 The shim is generic — any language with an HTTP server can reuse it; Go is just
 the reference consumer.
@@ -122,9 +135,12 @@ src/DotnetApi/      ASP.NET minimal API, self-contained + untrimmed (reflection)
 src/blazor/         the Blazor Web App, as two projects: BlazorApp/ (the server:
                     static SSR + /api/hello) and BlazorApp.Client/ (the WASM half)
 src/python-api/     FastAPI app, shipped with a bundled CPython interpreter
+src/java-api/       Spring Boot app, shipped with a jlink'd JRE
+src/java-aot-api/   the same Spring Boot app, compiled by GraalVM native-image
+src/kotlin-api/     Ktor app on Netty, shipped with a jlink'd JRE
 src/node-wrapper/   the execve shim every non-Node backend zips in as index.js
 infra/              AWS CDK app: a WebFunction L2 construct + the stack
-build/              generated artifacts (node-api.zip, go-api.zip, dotnet-api.zip, dotnet-aot-api.zip, blazor-web.zip, blazor-aot-web.zip, python-api.zip)
+build/              generated artifacts (node-api.zip, go-api.zip, dotnet-api.zip, dotnet-aot-api.zip, blazor-web.zip, blazor-aot-web.zip, python-api.zip, java-api.zip, java-aot-api.zip, kotlin-api.zip)
 ```
 
 `infra/lib/web-function.ts` is a small L2 construct over
@@ -142,10 +158,11 @@ task build
 
 Writes `build/node-api.zip`, `build/go-api.zip`, `build/dotnet-api.zip`,
 `build/dotnet-aot-api.zip`, `build/blazor-web.zip`, `build/blazor-aot-web.zip`,
-and `build/python-api.zip`.
+`build/python-api.zip`, `build/java-api.zip`, `build/java-aot-api.zip`, and
+`build/kotlin-api.zip`.
 
 Web Functions are arm64 only (Graviton), so every artifact is built for
-`linux/arm64`. Four build details worth knowing:
+`linux/arm64`. Six build details worth knowing:
 
 - The **NativeAOT** .NET publish runs in a `linux/arm64` SDK container
   ([`src/DotnetApiAot/Dockerfile.aot`](src/DotnetApiAot/Dockerfile.aot)) because
@@ -174,6 +191,13 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   Lambda sees it and smoked before being zipped. Docker's layer cache holds the
   interpreter and dependency layers, and only the zip is exported. You need
   Docker and network access. The zip is ~18 MB zipped / ~52 MB unzipped.
+- The **Java** builds add two more container-only toolchains. `src/java-api`
+  and `src/kotlin-api` are Maven builds that carry a `jlink`-trimmed JRE, the
+  Java equivalent of the Python backend's bundled interpreter. `src/java-aot-api`
+  runs `native-image` on GraalVM's own `-ol9` image, because a GraalVM binary
+  links glibc dynamically and so has to be built against the same 2.34 Amazon
+  Linux 2023 ships. See [`src/java-api/AGENTS.md`](src/java-api/AGENTS.md) and
+  [`src/java-aot-api/AGENTS.md`](src/java-aot-api/AGENTS.md).
 
 ## Deploy
 
@@ -183,7 +207,8 @@ task deploy
 
 Builds first, then runs `cdk deploy` from `infra/`. The stack deploys one Web
 Function per backend (`node-api-web`, `go-api-web`, `dotnet-api-web`,
-`dotnet-aot-api-web`, `blazor-web`, `blazor-aot-web`, `python-api-web`) and
+`dotnet-aot-api-web`, `blazor-web`, `blazor-aot-web`, `python-api-web`,
+`java-api-web`, `java-aot-api-web`, `kotlin-api-web`) and
 prints an endpoint URL for each. You need AWS credentials
 ([AWS CLI configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html))
 and a region where Web Functions are available.
@@ -204,6 +229,10 @@ same for the managed .NET build: `src/DotnetApi/smoke.sh` boots the published
 bundle and checks `/health` before the zip is written. `src/blazor/BlazorApp/smoke.sh`
 goes further for the Blazor builds: it checks that the home page actually
 renders, that `/api/hello` answers, and that the WebAssembly bundle shipped.
+`src/java-api/smoke.sh`, `src/java-aot-api/smoke.sh`, and
+`src/kotlin-api/smoke.sh` do the same for the three Java-family builds: each
+boots the assembled bundle and checks `/health` before the zip is written, since
+the bundle only runs on the target architecture.
 
 ## Docs
 
@@ -218,6 +247,9 @@ renders, that `/api/hello` answers, and that the WebAssembly bundle shipped.
 - [Web Functions networking](https://docs.aws.amazon.com/lambda/latest/dg/web-functions-networking.html) (why no server-interactive Blazor)
 - [python-build-standalone](https://github.com/astral-sh/python-build-standalone) (the bundled CPython)
 - [FastAPI](https://fastapi.tiangolo.com) and [uvicorn](https://www.uvicorn.org)
+- [Spring Boot](https://spring.io/projects/spring-boot), [jlink](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jlink.html) (the trimmed JRE), and [Spring Boot native images](https://docs.spring.io/spring-boot/3.5/how-to/native-image/index.html)
+- [GraalVM Native Image](https://www.graalvm.org/latest/reference-manual/native-image/) and its [glibc linkage](https://www.graalvm.org/latest/reference-manual/native-image/guides/build-static-executables/) (why the build pins `-ol9`)
+- [Ktor](https://ktor.io) and [Netty](https://netty.io)
 - [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
 - [Hono](https://hono.dev)
 

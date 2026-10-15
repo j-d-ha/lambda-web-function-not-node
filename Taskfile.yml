@@ -26,6 +26,9 @@ tasks:
       - build:blazor
       - build:blazor-aot
       - build:python-api
+      - build:java-api
+      - build:java-aot-api
+      - build:kotlin-api
 
   build:node-api:
     desc: Bundle the Node API into build/node-api.zip
@@ -103,6 +106,31 @@ tasks:
       # just the finished zip.
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/python-api.zip'
       - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' -f '{{.ROOT_DIR}}/src/python-api/Dockerfile' '{{.ROOT_DIR}}'
+
+  build:java-api:
+    desc: Build the Spring Boot JVM backend into build/java-api.zip (needs Docker)
+    cmds:
+      # Like the Python and managed-.NET builds, everything -- Maven, the
+      # jlink'd JRE, the smoke, the packaging -- happens on linux/arm64 inside
+      # src/java-api/Dockerfile and only the finished zip comes back out.
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/java-api.zip'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' -f '{{.ROOT_DIR}}/src/java-api/Dockerfile' '{{.ROOT_DIR}}'
+
+  build:java-aot-api:
+    desc: Build the GraalVM native-image Java backend into build/java-aot-api.zip (needs Docker)
+    cmds:
+      # native-image needs the GraalVM toolchain and a Linux C toolchain, so it
+      # runs in GraalVM's own linux/arm64 image. The -ol9 tag is load-bearing:
+      # it pins the binary's glibc requirement to 2.34, which is what the Web
+      # Function environment ships (see src/java-aot-api/Dockerfile).
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/java-aot-api.zip'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' -f '{{.ROOT_DIR}}/src/java-aot-api/Dockerfile' '{{.ROOT_DIR}}'
+
+  build:kotlin-api:
+    desc: Build the Kotlin/Ktor backend into build/kotlin-api.zip (needs Docker)
+    cmds:
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/kotlin-api.zip'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' -f '{{.ROOT_DIR}}/src/kotlin-api/Dockerfile' '{{.ROOT_DIR}}'
 
   deploy:
     desc: Deploy the CDK stack (builds artifacts first). Extra args via `task deploy -- ...`
