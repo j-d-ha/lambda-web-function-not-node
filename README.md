@@ -3,13 +3,13 @@
 Run a **non-Node** HTTP server on [Lambda Web Functions](https://docs.aws.amazon.com/lambda/latest/dg/web-functions.html),
 even though the managed runtime only boots Node.js.
 
-Lambda Web Functions are a newer Lambda flavor: you give AWS an HTTP app, point a
-Web Function revision at it, and get an HTTPS endpoint with its own scaling,
-concurrency, and rate-limit controls. The catch is the runtime — a revision's
-`runtime` today only accepts `nodejs24.x`. This repo shows nine backends that
-all answer the same request, eight of which run no Node at request time at all.
+Lambda Web Functions are a recent Lambda flavor: you give AWS an HTTP app, point
+a Web Function revision at it, and get an HTTPS endpoint with its own scaling,
+concurrency, and rate-limit controls. The catch is the runtime. A revision's
+`runtime` today only accepts `nodejs24.x`. This repo shows nine backends that all
+answer the same request, eight of which run no Node at request time at all.
 
-Every backend listens on the port in `AWS_LAMBDA_HTTP_ENDPOINT`, and answers
+Every backend listens on the address in `AWS_LAMBDA_HTTP_ENDPOINT` and answers
 `GET /health` with the same payload shape, naming itself:
 
 | Backend                            | Directory              | Response                                 |
@@ -24,12 +24,17 @@ Every backend listens on the port in `AWS_LAMBDA_HTTP_ENDPOINT`, and answers
 | Java (GraalVM native-image)        | `src/java-api`         | `{"status":"Ok","backend":"java-aot"}`   |
 | Kotlin (Ktor, JVM)                 | `src/kotlin-api`       | `{"status":"Ok","backend":"kotlin"}`     |
 
-Blazor is the only one that serves a user interface as well as JSON. Two of the
-rows share a directory on purpose: `src/blazor/BlazorApp` and `src/java-api` are
-each built twice, because in both cases only the packaging differs and not the
-source. See [Blazor](#blazor) below.
+Blazor is the only one that serves a user interface as well as JSON. Two rows
+share a directory on purpose: `src/blazor/BlazorApp` and `src/java-api` are each
+built twice, and in both cases only the packaging differs, not the source. See
+[Blazor](#blazor) below.
 
 ## How it works
+
+The technique comes from [Aidan Steele's *Go on Lambda Web Functions via
+execve*](https://awsteele.com/blog/2026/10/12/go-on-lambda-web-functions-via-execve.html).
+That post is where both the `process.execve` trick and the `/2025-09-01/ready`
+callback it forces come from. This repo generalizes it to more languages.
 
 The trick is a one-line Node.js shim, [`src/node-wrapper/index.js`](src/node-wrapper/index.js):
 
@@ -38,25 +43,25 @@ process.execve("/var/task/server", ["/var/task/server"], process.env);
 ```
 
 Lambda starts the environment by booting Node (`nodejs24.x`) and `import()`ing
-the revision's `index.js`. `process.execve` — Node 24's
-[syscall wrapper](https://nodejs.org/docs/latest-v24.x/api/process.html#processexecvefile-args-env)
-— replaces the entire process image with the native binary sitting next to it.
-Once the exec returns, there is no Node, no V8, and no npm in the process. The
-revision still declares `nodejs24.x`, but that only ever runs the shim.
+the revision's `index.js`. `process.execve`, Node 24's
+[syscall wrapper](https://nodejs.org/docs/latest-v24.x/api/process.html#processexecvefile-args-env),
+replaces the whole process image with the native binary sitting next to it.
+After that call there is no Node, no V8, and no npm left. The revision still
+declares `nodejs24.x`, but that only ever runs the shim.
 
-That exec has one consequence worth spelling out: it also replaces the
-[Lambda runtime interface client](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html)
-that normally POSTs `/ready` once the port probe passes. So the contract for any
-backend that reuses the shim is:
+That exec also replaces the [Lambda runtime interface
+client](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html) that
+normally POSTs `/ready` once the port probe passes. Any backend that reuses the
+shim therefore has one contract:
 
 1. Ship the shim as `index.js` in the zip root.
-2. Ship the server entrypoint as `server` in the zip root — a native binary, or
+2. Ship the server entrypoint as `server` in the zip root: a native binary, or
    an executable script with an interpreter on its shebang line.
 3. Have that entrypoint POST `/2025-09-01/ready` to `AWS_LAMBDA_RUNTIME_API`
-   itself once it is listening — otherwise the invocation fails with
+   itself once it is listening, or the invocation fails with
    `Runtime.InitTimeout`.
 
-The non-Node backends follow that contract:
+The non-Node backends follow it:
 
 - **Go** ([`src/go-api/main.go`](src/go-api/main.go)) listens, calls
   `signalReady()`, and serves `net/http` with a 900ms `SIGTERM` graceful
@@ -65,7 +70,7 @@ The non-Node backends follow that contract:
   uses `WebApplication.CreateSlimBuilder` and, when
   `AWS_LAMBDA_HTTP_ENDPOINT` is set, binds to it and POSTs `/ready` after
   `StartAsync`. It is published with [NativeAOT](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/),
-  so there is no .NET runtime in the environment either — it is the smallest
+  so there is no .NET runtime in the environment either. It is the smallest
   backend here, and it gives up reflection to get there.
 - **ASP.NET, managed .NET runtime** ([`src/DotnetApi/Program.cs`](src/DotnetApi/Program.cs))
   is the same shape but drops AOT and trimming on purpose, because it explicitly
@@ -85,29 +90,28 @@ The non-Node backends follow that contract:
   execs a `jlink`-trimmed JRE the build carries in the zip.
 - **Java, native** ([`src/java-api/Dockerfile.aot`](src/java-api/Dockerfile.aot))
   is that same source compiled ahead of time by GraalVM `native-image`, so
-  `server` is one binary and no JVM ships at all. Same app, second packaging —
+  `server` is one binary and no JVM ships at all. Same app, second packaging:
   the two differ in how they are built, not in what they are.
 - **Kotlin** ([`src/kotlin-api`](src/kotlin-api)) is the JVM Java backend's
   shape on a different framework and a different build: Ktor on Netty, packed
   as a shaded fat jar rather than Spring's repackaged one.
 
-The shim is generic — any language with an HTTP server can reuse it; Go is just
+The shim is generic. Any language with an HTTP server can reuse it; Go is just
 the reference consumer.
 
 ## Blazor
 
 `src/blazor/` holds a [Blazor Web App](https://learn.microsoft.com/aspnet/core/blazor/)
 on the same shim, as two sibling projects: `BlazorApp/` (the server) and
-`BlazorApp.Client/` (the WebAssembly half that runs in the browser). They are one
-deliverable — one zip, one Web Function — and the folder keeps that obvious. It
-is the only backend here that serves a page, not just JSON.
+`BlazorApp.Client/` (the WebAssembly half that runs in the browser). They ship
+as one deliverable: one zip, one Web Function, kept together in one folder.
 
-It uses the two render modes that are plain HTTP — **static SSR** for the page
+It uses the two render modes that are plain HTTP: **static SSR** for the page
 shell and **Interactive WebAssembly** for the component that calls the backend.
-The page proves two round trips at once: the values under "Rendered on the
-server" were produced by the Web Function, and the values under "Fetched from
-the backend" arrived over HTTP from that same Web Function, fetched by
-WebAssembly running in your browser.
+The page proves two round trips at once. The values under "Rendered on the
+server" come from the Web Function, and the values under "Fetched from the
+backend" arrive over HTTP from that same Web Function, fetched by WebAssembly
+running in your browser.
 
 It deliberately does **not** use Interactive Server or Interactive Auto. Those
 hold a SignalR circuit open over a WebSocket, and Web Functions do not support
@@ -116,15 +120,15 @@ the details and the deployment targets that do fit.
 
 `task build` produces two zips from that one source:
 
-- `build/blazor-web.zip` — the WebAssembly client interpreted (the default).
-- `build/blazor-aot-web.zip` — the client compiled ahead of time
+- `build/blazor-web.zip`, the WebAssembly client interpreted (the default).
+- `build/blazor-aot-web.zip`, the client compiled ahead of time
   (`RunAOTCompilation` + `WasmStripILAfterAOT`): a larger download, much faster
   execution. It deploys as a second Web Function, so the two can be compared
   side by side.
 
-AOT here is a publish property, not different code — unlike `DotnetApi` vs
-`DotnetApiAot`, which differ because one needs reflection and the other cannot
-have it. The server half of both Blazor builds is identical.
+AOT here is a publish property, not different code. That is unlike `DotnetApi`
+vs `DotnetApiAot`, which differ because one needs reflection and the other
+cannot have it. The server half of both Blazor builds is identical.
 
 ## Repository layout
 
@@ -163,7 +167,7 @@ Writes `build/node-api.zip`, `build/go-api.zip`, `build/dotnet-api.zip`,
 `build/kotlin-api.zip`.
 
 Web Functions are arm64 only (Graviton), so every artifact is built for
-`linux/arm64`. Six build details worth knowing:
+`linux/arm64`. Six build details matter:
 
 - The **NativeAOT** .NET publish runs in a `linux/arm64` SDK container
   ([`src/DotnetApiAot/Dockerfile.aot`](src/DotnetApiAot/Dockerfile.aot)) because
@@ -181,21 +185,23 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   AOT variant compiles it through Emscripten (which needs the `python3` the
   image also installs). The server half is a self-contained untrimmed publish
   like `DotnetApi`; only the client bundle differs between the two zips. The
-  AOT publish is slow — it compiles every assembly to WebAssembly.
-- The Go, .NET and Node zips put the shim and the binary in the zip root (via
-  `zip -j`), because the shim hardcodes `/var/task/server`.
+  AOT publish is slow: it compiles every assembly to WebAssembly.
+- The Go and .NET zips put the shim and the binary in the zip root (via
+  `zip -j`), because the shim hardcodes `/var/task/server`. The Node zip needs
+  no shim: Node is the runtime Lambda already boots, so its bundled entrypoint
+  is the `index.js` Lambda imports.
 - The Python build is a real [uv](https://docs.astral.sh/uv/) project
   (`pyproject.toml` + `uv.lock` + `.python-version`) built by
   [`src/python-api/Dockerfile`](src/python-api/Dockerfile) on `linux/arm64`.
-  Everything happens in the container — uv installs the pinned interpreter, the
+  Everything happens in the container: uv installs the pinned interpreter, the
   locked dependencies, the unit test runs, then the bundle is laid out as
   Lambda sees it and smoked before being zipped. Docker's layer cache holds the
   interpreter and dependency layers, and only the zip is exported. You need
   Docker and network access. The zip is ~17 MB zipped / ~48 MB unzipped.
 - The **Java** build and the **Kotlin** build add two more container-only
-  toolchains. `src/java-api` is Maven and `src/kotlin-api` is Gradle, through the
-  wrapper the repo commits; both carry a `jlink`-trimmed JRE, the Java equivalent
-  of the Python backend's bundled interpreter.
+  toolchains: `src/java-api` builds with Maven and `src/kotlin-api` with Gradle,
+  through the wrapper the repo commits for Gradle. Both carry a `jlink`-trimmed
+  JRE, the Java equivalent of the Python backend's bundled interpreter.
   `src/java-api/Dockerfile.aot` runs `native-image` on GraalVM's own `-ol9`
   image, because a GraalVM binary links glibc dynamically and so has to be built
   against the same 2.34 Amazon Linux 2023 ships. All three target Java 25 (LTS);
@@ -212,7 +218,7 @@ counts against the **250 MB unzipped limit** for each function.
 
 | Backend                     | Zipped | Unzipped | Files | What the bulk is                               |
 | --------------------------- | -----: | -------: | ----: | ---------------------------------------------- |
-| Node.js (reference)         |  23 KB |    90 KB |     2 | the app and the shim                           |
+| Node.js (reference)         |  23 KB |    90 KB |     2 | the bundled Hono app                           |
 | Go                          |    4.5 |      8.3 |     2 | one static binary                              |
 | ASP.NET (NativeAOT)         |    5.7 |     13.0 |     3 | one static binary                              |
 | Python (FastAPI)            |   17.1 |     47.7 | 1,623 | a relocatable CPython plus the locked wheels   |
@@ -228,7 +234,7 @@ one that matters for storage: each function gets its own extracted copy, so that
 is roughly the footprint of the whole demo once every backend is deployed. Blazor
 AOT is the closest to the ceiling, at ~155 MB unzipped.
 
-Two things worth knowing about what Lambda actually stores:
+Two things to know about what Lambda actually stores:
 
 - The code bucket is **versioned**, because a revision pins one exact object
   version. Every deploy of any backend uploads a new version of its zip rather
@@ -267,24 +273,24 @@ and a region where Web Functions are available.
 
 The Python test also runs inside `task build:python-api`, which additionally
 boots the assembled bundle on `linux/arm64` and checks `/health` before it zips
-it — the bundle only runs on the target architecture, so that is where the
+it. The bundle only runs on the target architecture, so that is where the
 interpreter and wheels are actually exercised. `task build:dotnet-api` does the
 same for the managed .NET build: `src/DotnetApi/smoke.sh` boots the published
 bundle and checks `/health` before the zip is written. `src/blazor/BlazorApp/smoke.sh`
 goes further for the Blazor builds: it checks that the home page actually
 renders, that `/api/hello` answers, and that the WebAssembly bundle shipped.
 `src/java-api/smoke.sh` and `src/kotlin-api/smoke.sh` do the same for the
-Java-family builds: each boots the assembled bundle and checks `/health` before
-the zip is written, since the bundle only runs on the target architecture. The
-Java one takes the expected backend name as an argument, so a single script covers
-both of that project's builds and doubles as a check that the revision's
-`BACKEND_NAME` actually reaches the running app.
+Java-family builds, booting the assembled bundle and checking `/health` before
+the zip is written. The Java one takes the expected backend name as an argument,
+so a single script covers both of that project's builds and doubles as a check
+that the revision's `BACKEND_NAME` actually reaches the running app.
 
 ## Docs
 
 - [Lambda Web Functions](https://docs.aws.amazon.com/lambda/latest/dg/web-functions.html)
 - [Lambda runtime API](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html) (`/ready`, `/next`)
 - [`process.execve`](https://nodejs.org/docs/latest-v24.x/api/process.html#processexecvefile-args-env)
+- [Aidan Steele: *Go on Lambda Web Functions via execve*](https://awsteele.com/blog/2026/10/12/go-on-lambda-web-functions-via-execve.html)
 - [`AWS::Lambda::WebFunction` (CloudFormation)](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-webfunction.html)
 - [Native AOT deployment](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/)
 - [Trimming options](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/trimming-options) (why reflection rules it out here)
@@ -298,14 +304,6 @@ both of that project's builds and doubles as a check that the revision's
 - [Ktor](https://ktor.io) and [Netty](https://netty.io), built with [Gradle](https://docs.gradle.org/current/userguide/userguide.html) (the wrapper is committed) and pinned through a [version catalog](https://docs.gradle.org/current/userguide/version_catalogs.html)
 - [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
 - [Hono](https://hono.dev)
-
-## Credit
-
-Based on the technique from **Alex Steele's** post
-[*Go on Lambda Web Functions via execve*](https://awsteele.com/blog/2026/10/12/go-on-lambda-web-functions-via-execve.html)
-(12 Oct 2026). That article is where the `process.execve` approach — and the
-`/2025-09-01/ready` callback it forces — comes from. This repo generalizes it and
-adds ASP.NET and Python as further non-Node backends.
 
 ## License
 
