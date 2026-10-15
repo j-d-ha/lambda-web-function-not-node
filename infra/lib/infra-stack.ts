@@ -66,6 +66,26 @@ export class InfraStack extends cdk.Stack {
         sourcePath: "../build/python-api.zip",
         outputId: "PythonEndpointUrl",
       },
+      {
+        // A Blazor Web App on the shared shim: static server-side rendering
+        // plus a WebAssembly client that calls back into this same function.
+        // The server project is untrimmed (see src/blazor/BlazorApp), so this is the
+        // dotnet-api-class zip; the WebAssembly client bundle is trimmed by the
+        // Blazor SDK on its own.
+        id: "BlazorWebFunction",
+        functionName: "blazor-web",
+        sourcePath: "../build/blazor-web.zip",
+        outputId: "BlazorEndpointUrl",
+      },
+      {
+        // The same app with the WebAssembly client compiled ahead of time. The
+        // server is identical; only the client bundle differs, which is why
+        // both come from one project and one Dockerfile.
+        id: "BlazorAotWebFunction",
+        functionName: "blazor-aot-web",
+        sourcePath: "../build/blazor-aot-web.zip",
+        outputId: "BlazorAotEndpointUrl",
+      },
     ];
 
     for (const backend of backends) {

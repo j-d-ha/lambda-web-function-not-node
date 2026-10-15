@@ -33,6 +33,12 @@ test("InfraStack deploys a web function per backend with an endpoint output", ()
   template.hasResourceProperties("AWS::Lambda::WebFunction", {
     FunctionName: "python-api-web",
   });
+  template.hasResourceProperties("AWS::Lambda::WebFunction", {
+    FunctionName: "blazor-web",
+  });
+  template.hasResourceProperties("AWS::Lambda::WebFunction", {
+    FunctionName: "blazor-aot-web",
+  });
   template.hasResourceProperties("AWS::Lambda::WebFunctionEndpoint", {
     EndpointType: "HomeRegion",
     AuthType: "ApplicationManaged",
@@ -42,6 +48,8 @@ test("InfraStack deploys a web function per backend with an endpoint output", ()
   template.hasOutput("DotnetEndpointUrl", {});
   template.hasOutput("DotnetAotEndpointUrl", {});
   template.hasOutput("PythonEndpointUrl", {});
+  template.hasOutput("BlazorEndpointUrl", {});
+  template.hasOutput("BlazorAotEndpointUrl", {});
 
   // One shared, versioned code bucket that every revision pins into.
   template.hasResourceProperties("AWS::S3::Bucket", {
@@ -50,7 +58,7 @@ test("InfraStack deploys a web function per backend with an endpoint output", ()
   const revisions = Object.values(
     template.findResources("AWS::Lambda::WebFunctionRevision"),
   );
-  expect(revisions).toHaveLength(5);
+  expect(revisions).toHaveLength(7);
   for (const revision of revisions) {
     expect(revision.Properties.BuildConfig.CodeConfig.S3Object.Bucket).toEqual({
       Ref: expect.any(String),

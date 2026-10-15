@@ -23,6 +23,8 @@ tasks:
       - build:go-api
       - build:dotnet-api
       - build:dotnet-aot-api
+      - build:blazor
+      - build:blazor-aot
       - build:python-api
 
   build:node-api:
@@ -70,6 +72,25 @@ tasks:
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api.zip'
       - zip -jq '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api.zip' '{{.ROOT_DIR}}/{{.NODE_WRAPPER}}' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api/server' '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api/appsettings.json'
       - rm -rf '{{.ROOT_DIR}}/{{.BUILD_DIR}}/dotnet-aot-api'
+
+  build:blazor:
+    desc: Build the Blazor Web App (interpreted WebAssembly) into build/blazor-web.zip
+    cmds:
+      # One app, two projects, two build tasks: AOT is a publish property, not
+      # different code, so the AOT variant below is the same source with the
+      # flag flipped. The server is a self-contained linux-arm64 publish either
+      # way; only the WebAssembly client bundle differs. Needs Docker and
+      # network access (the build installs the wasm-tools workload).
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/blazor-web.zip'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' --build-arg ZIP_NAME=blazor-web.zip -f '{{.ROOT_DIR}}/src/blazor/BlazorApp/Dockerfile' '{{.ROOT_DIR}}'
+
+  build:blazor-aot:
+    desc: Build the Blazor Web App (AOT-compiled WebAssembly) into build/blazor-aot-web.zip
+    cmds:
+      # RunAOTCompilation + WasmStripILAfterAOT: a much larger client bundle for
+      # faster execution in the browser. Same server, same source.
+      - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/blazor-aot-web.zip'
+      - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' --build-arg ZIP_NAME=blazor-aot-web.zip --build-arg AOT=true --build-arg STRIP_IL=true -f '{{.ROOT_DIR}}/src/blazor/BlazorApp/Dockerfile' '{{.ROOT_DIR}}'
 
   build:python-api:
     desc: Build FastAPI + a bundled CPython into build/python-api.zip (needs Docker)

@@ -6,19 +6,24 @@ even though the managed runtime only boots Node.js.
 Lambda Web Functions are a newer Lambda flavor: you give AWS an HTTP app, point a
 Web Function revision at it, and get an HTTPS endpoint with its own scaling,
 concurrency, and rate-limit controls. The catch is the runtime — a revision's
-`runtime` today only accepts `nodejs24.x`. This repo shows five backends that
-all answer the same request, four of which run no Node at request time at all.
+`runtime` today only accepts `nodejs24.x`. This repo shows six backends that
+all answer the same request, five of which run no Node at request time at all.
 
 Every backend listens on the port in `AWS_LAMBDA_HTTP_ENDPOINT`, and answers
 `GET /health` with the same payload shape, naming itself:
 
-| Backend                            | Directory          | Response                                 |
-| ---------------------------------- | ------------------ | ---------------------------------------- |
-| Node.js (reference)                | `src/node-api`     | `{"status":"Ok","backend":"node"}`       |
-| Go                                 | `src/go-api`       | `{"status":"Ok","backend":"go"}`         |
-| ASP.NET (NativeAOT, trimmed)       | `src/DotnetApiAot` | `{"status":"OK","backend":"dotnet-aot"}` |
-| ASP.NET (.NET runtime, reflection) | `src/DotnetApi`    | `{"status":"Ok","backend":"dotnet"}`     |
-| Python (FastAPI)                   | `src/python-api`   | `{"status":"Ok","backend":"python"}`     |
+| Backend                            | Directory              | Response                                 |
+| ---------------------------------- | ---------------------- | ---------------------------------------- |
+| Node.js (reference)                | `src/node-api`         | `{"status":"Ok","backend":"node"}`       |
+| Go                                 | `src/go-api`           | `{"status":"Ok","backend":"go"}`         |
+| ASP.NET (NativeAOT, trimmed)       | `src/DotnetApiAot`     | `{"status":"OK","backend":"dotnet-aot"}` |
+| ASP.NET (.NET runtime, reflection) | `src/DotnetApi`        | `{"status":"Ok","backend":"dotnet"}`     |
+| Blazor Web App (server + WASM)     | `src/blazor/BlazorApp` | `{"status":"Ok","backend":"blazor"}`     |
+| Python (FastAPI)                   | `src/python-api`       | `{"status":"Ok","backend":"python"}`     |
+
+Blazor is the only one that serves a user interface as well as JSON — and the
+only one built twice, as an interpreted and an AOT-compiled WebAssembly client
+from the same source. See [Blazor](#blazor) below.
 
 ## How it works
 
@@ -75,6 +80,38 @@ The non-Node backends follow that contract:
 The shim is generic — any language with an HTTP server can reuse it; Go is just
 the reference consumer.
 
+## Blazor
+
+`src/blazor/` holds a [Blazor Web App](https://learn.microsoft.com/aspnet/core/blazor/)
+on the same shim, as two sibling projects: `BlazorApp/` (the server) and
+`BlazorApp.Client/` (the WebAssembly half that runs in the browser). They are one
+deliverable — one zip, one Web Function — and the folder keeps that obvious. It
+is the only backend here that serves a page, not just JSON.
+
+It uses the two render modes that are plain HTTP — **static SSR** for the page
+shell and **Interactive WebAssembly** for the component that calls the backend.
+The page proves two round trips at once: the values under "Rendered on the
+server" were produced by the Web Function, and the values under "Fetched from
+the backend" arrived over HTTP from that same Web Function, fetched by
+WebAssembly running in your browser.
+
+It deliberately does **not** use Interactive Server or Interactive Auto. Those
+hold a SignalR circuit open over a WebSocket, and Web Functions do not support
+WebSocket upgrades. See [`src/blazor/AGENTS.md`](src/blazor/AGENTS.md) for
+the details and the deployment targets that do fit.
+
+`task build` produces two zips from that one source:
+
+- `build/blazor-web.zip` — the WebAssembly client interpreted (the default).
+- `build/blazor-aot-web.zip` — the client compiled ahead of time
+  (`RunAOTCompilation` + `WasmStripILAfterAOT`): a larger download, much faster
+  execution. It deploys as a second Web Function, so the two can be compared
+  side by side.
+
+AOT here is a publish property, not different code — unlike `DotnetApi` vs
+`DotnetApiAot`, which differ because one needs reflection and the other cannot
+have it. The server half of both Blazor builds is identical.
+
 ## Repository layout
 
 ```
@@ -82,10 +119,12 @@ src/node-api/       Hono app on @hono/node-server (the Node baseline)
 src/go-api/         Go net/http server + the shared shim in its zip
 src/DotnetApiAot/   ASP.NET minimal API, NativeAOT-published (small, no reflection)
 src/DotnetApi/      ASP.NET minimal API, self-contained + untrimmed (reflection)
+src/blazor/         the Blazor Web App, as two projects: BlazorApp/ (the server:
+                    static SSR + /api/hello) and BlazorApp.Client/ (the WASM half)
 src/python-api/     FastAPI app, shipped with a bundled CPython interpreter
 src/node-wrapper/   the execve shim every non-Node backend zips in as index.js
 infra/              AWS CDK app: a WebFunction L2 construct + the stack
-build/              generated artifacts (node-api.zip, go-api.zip, dotnet-api.zip, dotnet-aot-api.zip, python-api.zip)
+build/              generated artifacts (node-api.zip, go-api.zip, dotnet-api.zip, dotnet-aot-api.zip, blazor-web.zip, blazor-aot-web.zip, python-api.zip)
 ```
 
 `infra/lib/web-function.ts` is a small L2 construct over
@@ -102,7 +141,8 @@ task build
 ```
 
 Writes `build/node-api.zip`, `build/go-api.zip`, `build/dotnet-api.zip`,
-`build/dotnet-aot-api.zip`, and `build/python-api.zip`.
+`build/dotnet-aot-api.zip`, `build/blazor-web.zip`, `build/blazor-aot-web.zip`,
+and `build/python-api.zip`.
 
 Web Functions are arm64 only (Graviton), so every artifact is built for
 `linux/arm64`. Four build details worth knowing:
@@ -117,6 +157,13 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   ships is the one that was exercised. Reflection means no trimming and no AOT,
   so this zip carries the whole .NET runtime: ~115 MB unzipped / ~45 MB zipped,
   against ~10 MB for the NativeAOT build.
+- The **Blazor** build ([`src/blazor/BlazorApp/Dockerfile`](src/blazor/BlazorApp/Dockerfile))
+  also runs on `linux/arm64`, and installs the `wasm-tools` workload inside the
+  image: publishing a Blazor WebAssembly client IL-links the runtime, and the
+  AOT variant compiles it through Emscripten (which needs the `python3` the
+  image also installs). The server half is a self-contained untrimmed publish
+  like `DotnetApi`; only the client bundle differs between the two zips. The
+  AOT publish is slow — it compiles every assembly to WebAssembly.
 - The Go, .NET and Node zips put the shim and the binary in the zip root (via
   `zip -j`), because the shim hardcodes `/var/task/server`.
 - The Python build is a real [uv](https://docs.astral.sh/uv/) project
@@ -136,8 +183,8 @@ task deploy
 
 Builds first, then runs `cdk deploy` from `infra/`. The stack deploys one Web
 Function per backend (`node-api-web`, `go-api-web`, `dotnet-api-web`,
-`dotnet-aot-api-web`, `python-api-web`) and prints an endpoint URL for each. You
-need AWS credentials
+`dotnet-aot-api-web`, `blazor-web`, `blazor-aot-web`, `python-api-web`) and
+prints an endpoint URL for each. You need AWS credentials
 ([AWS CLI configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html))
 and a region where Web Functions are available.
 
@@ -154,7 +201,9 @@ boots the assembled bundle on `linux/arm64` and checks `/health` before it zips
 it — the bundle only runs on the target architecture, so that is where the
 interpreter and wheels are actually exercised. `task build:dotnet-api` does the
 same for the managed .NET build: `src/DotnetApi/smoke.sh` boots the published
-bundle and checks `/health` before the zip is written.
+bundle and checks `/health` before the zip is written. `src/blazor/BlazorApp/smoke.sh`
+goes further for the Blazor builds: it checks that the home page actually
+renders, that `/api/hello` answers, and that the WebAssembly bundle shipped.
 
 ## Docs
 
@@ -164,6 +213,9 @@ bundle and checks `/health` before the zip is written.
 - [`AWS::Lambda::WebFunction` (CloudFormation)](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-lambda-webfunction.html)
 - [Native AOT deployment](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/)
 - [Trimming options](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/trimming-options) (why reflection rules it out here)
+- [Blazor hosting models](https://learn.microsoft.com/en-us/aspnet/core/blazor/hosting-models) and [render modes](https://learn.microsoft.com/en-us/aspnet/core/blazor/components/render-modes)
+- [Blazor WebAssembly AOT](https://learn.microsoft.com/en-us/aspnet/core/blazor/webassembly-build-tools-and-aot) (the `RunAOTCompilation` build)
+- [Web Functions networking](https://docs.aws.amazon.com/lambda/latest/dg/web-functions-networking.html) (why no server-interactive Blazor)
 - [python-build-standalone](https://github.com/astral-sh/python-build-standalone) (the bundled CPython)
 - [FastAPI](https://fastapi.tiangolo.com) and [uvicorn](https://www.uvicorn.org)
 - [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/home.html)

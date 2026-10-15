@@ -1,0 +1,74 @@
+@*
+    Prerendering is off on purpose: this component must fetch in the browser, so
+    the call it makes is unambiguously a client -> Web Function round trip. With
+    prerendering on, OnInitializedAsync would also run on the server, where no
+    HttpClient is registered for the client project.
+*@
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using Microsoft.Extensions.Logging
+@inject HttpClient Http
+@inject ILogger<BackendProbe> Logger
+
+<div class="probe">
+    @if (_loading && _hello is null)
+    {
+        <p class="probe-status">Calling <code>/api/hello</code>&hellip;</p>
+    }
+    else if (_failed)
+    {
+        <p class="probe-status is-error">
+            Could not reach <code>/api/hello</code>. The reason is in the browser console.
+        </p>
+    }
+    else if (_hello is not null)
+    {
+        <dl class="kv">
+            <dt>status</dt>
+            <dd>@_hello.Status</dd>
+            <dt>backend</dt>
+            <dd>@_hello.Backend</dd>
+            <dt>server</dt>
+            <dd>@_hello.Server</dd>
+            <dt>served at</dt>
+            <dd>@_hello.ServedAt</dd>
+        </dl>
+    }
+
+    <button class="btn" @onclick="FetchAsync" disabled="@_loading">
+        @(_loading ? "Fetching..." : "Fetch again")
+    </button>
+
+    <p class="note">
+        These values arrived over HTTP from the Web Function. This component is running
+        in your browser as WebAssembly.
+    </p>
+</div>
+
+@code {
+    private HelloResponse? _hello;
+    private bool _failed;
+    private bool _loading;
+
+    protected override Task OnInitializedAsync() => FetchAsync();
+
+    private async Task FetchAsync()
+    {
+        _loading = true;
+        _failed = false;
+        try
+        {
+            _hello = await Http.GetFromJsonAsync<HelloResponse>("/api/hello");
+        }
+        catch (Exception ex)
+        {
+            // Say that the round trip failed without echoing an exception
+            // message into the page; the detail goes to the browser console.
+            Logger.LogError(ex, "GET /api/hello failed");
+            _failed = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
