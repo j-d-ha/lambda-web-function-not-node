@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.1</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>dev.jdha</groupId>
+  <artifactId>java-api</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>java-api</name>
+
+  <properties>
+    <!-- Java 25 is the current LTS (Sept 2025). Java 27 is newer but is a
+         non-LTS release with updates only until March 2027, and Spring Boot
+         4.1 supports Java up to 26, so 25 is the version to target. -->
+    <java.version>25</java.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <!-- Spring Boot 4 split the catch-all starters: the servlet stack moved
+           from spring-boot-starter-web to spring-boot-starter-webmvc. -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- app.jar, so the launcher script and the Dockerfile have one name to
+         point at whatever the version happens to be. -->
+    <finalName>app</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <!-- Only Dockerfile.aot uses this, and it invokes the goal directly:
+             `mvn -Pnative native:compile`. Deliberately not bound to a phase
+             here, because an execution bound to `package` would run for the JVM
+             build too, which has no native-image and would fail. The parent's
+             `native` profile only *configures* this plugin via pluginManagement,
+             so nothing runs unless it is asked for. -->
+        <groupId>org.graalvm.buildtools</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+        <configuration>
+          <!-- The shim's contract is a binary called `server` in the zip root. -->
+          <imageName>server</imageName>
+          <buildArgs>
+            <!-- java.net.http, used for the /ready POST, needs the plain-HTTP
+                 protocol: GraalVM only ships https, file and jar by default. -->
+            <buildArg>--enable-url-protocols=http</buildArg>
+          </buildArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -9,4 +9,7 @@ build
 **/obj
 **/.venv
 **/__pycache__
+**/target
+**/.gradle
+**/build
 *.zip

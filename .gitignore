@@ -90,6 +90,10 @@ __pycache__/
 *.py[cod]
 .venv/
 
+### Gradle stuff
+
+.gradle/
+
 # misc
 .DS_Store
 
