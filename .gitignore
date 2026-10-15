@@ -94,6 +94,10 @@ __pycache__/
 
 .gradle/
 
+### Maven stuff
+
+target/
+
 # misc
 .DS_Store
 

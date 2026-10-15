@@ -28,10 +28,10 @@ builds use it, so the JVM and native variants are the same code path.
 ## One directory, not two
 
 `src/DotnetApi` and `src/DotnetApiAot` are separate projects because they differ
-in *code* -- one needs reflection, the other cannot have it. This backend has no
+in *code*: one needs reflection, the other cannot have it. This backend has no
 such difference: `-Pnative` is a publish property, so the source is identical and
 only the packaging differs. That makes it the `src/blazor` situation, and the
-same conclusion applies -- share the source, duplicate only the build.
+same conclusion applies: share the source, duplicate only the build.
 
 The consequence is that the backend name cannot be a string literal, because
 there is one literal and two answers. It is configuration instead:
@@ -40,9 +40,9 @@ there is one literal and two answers. It is configuration instead:
 covers a local `mvn spring-boot:run`. `smoke.sh` takes the expected name as an
 argument and passes it through the same variable.
 
-That check is worth something only in the native build, which passes `java-aot`
--- a value that differs from the default, so a property that failed to resolve
-would show up as a wrong body rather than passing. The JVM build's name happens
+That check only proves anything in the native build, which passes `java-aot`, a
+value that differs from the default, so a property that failed to resolve would
+show up as a wrong body rather than passing. The JVM build's name happens
 to equal the default, so its run proves less. Property resolution in a native
 image is the least obvious part of this arrangement, so the native smoke is the
 one that matters.
@@ -69,13 +69,13 @@ toolchain and every module whether the app touches them or not. `jlink` builds a
 runtime image with only the modules the app needs, which is the trim
 `src/python-api` applies to its interpreter. The list is deliberately short:
 
-- `java.se` -- every Java SE module, which is what Spring Boot and Tomcat expect
+- `java.se`: every Java SE module, which is what Spring Boot and Tomcat expect
   to find. It drags `java.desktop` along, so `libawt.so` and `libfontmanager.so`
   ship for nothing.
-- `jdk.unsupported` -- `sun.misc.Unsafe`, which Spring and Netty reach for.
-- `jdk.crypto.ec` -- the EC TLS providers, kept so an app that grows an HTTPS
+- `jdk.unsupported`: `sun.misc.Unsafe`, which Spring reaches for.
+- `jdk.crypto.ec`: the EC TLS providers, kept so an app that grows an HTTPS
   client still starts.
-- `jdk.zipfs` -- the zip filesystem the fat-jar loader reads nested jars through.
+- `jdk.zipfs`: the zip filesystem the fat-jar loader reads nested jars through.
 
 The next real lever, if it is ever needed, is listing modules explicitly instead
 of `java.se` to drop `java.desktop` and `java.sql`; that trades a few MB for the
@@ -87,26 +87,26 @@ Unlike Go (`CGO_ENABLED=0`) and .NET NativeAOT, a GraalVM native binary is **not
 statically linked: by default it links `libc`, `libpthread`, `librt`, `libdl` and
 `libz` dynamically, so the glibc it was built against becomes a runtime
 requirement. The Web Function environment is Amazon Linux 2023, glibc 2.34, so
-the build runs on `ghcr.io/graalvm/native-image-community:25-ol9` -- Oracle Linux
+the build runs on `ghcr.io/graalvm/native-image-community:25-ol9`, Oracle Linux
 9, also glibc 2.34. Building on a newer distro would link symbols AL2023 does not
 have and the binary would fail to load there.
 
 That is also why the in-container smoke test cannot prove it on its own: it runs
 in the same container that built the binary, so it validates startup, not
-portability. The `-ol9` pin is what makes the portability claim true -- do not
+portability. The `-ol9` pin is what makes the portability claim true. Do not
 relax it to a generic tag.
 
 Verified by hand, since the build cannot: unzip the artifact and run `server` in
 `public.ecr.aws/lambda/provided:al2023`. It boots and answers `/health` there on
 glibc 2.34, and `readelf -d` shows no `RPATH`/`RUNPATH` and only `libz.so.1`,
-`libc.so.6` and `ld-linux-aarch64.so.1` as `NEEDED` -- nothing resolved out of the
+`libc.so.6` and `ld-linux-aarch64.so.1` as `NEEDED`. Nothing resolved out of the
 build directory. Re-run that check whenever the GraalVM tag or the JVM flags
 change.
 
 GraalVM 25 also writes optional `lib*.so` shims (`libawt.so`,
 `libmanagement_ext.so`, `libjvm.so`, ...) beside the binary in `target/`. This app
 does not use them and the build copies only `target/server`, which the AL2023
-check above confirms is sufficient -- do not start copying the whole target
+check above confirms is sufficient. Do not start copying the whole target
 directory in.
 
 ## Size
@@ -125,21 +125,21 @@ image it generates is not small. It buys startup time, not size. The JVM zip is 
 
 ## Layout
 
-- `pom.xml` -- the Spring Boot parent, `spring-boot-starter-webmvc`, the
+- `pom.xml`: the Spring Boot parent, `spring-boot-starter-webmvc`, the
   `native-maven-plugin` configuration for the AOT build, and `finalName=app` so
   the jar name does not carry the version.
-- `src/main/java/dev/jdha/javaapi/JavaApiApplication.java` -- the entry point and
+- `src/main/java/dev/jdha/javaapi/JavaApiApplication.java`: the entry point and
   the one setting that has to be computed at startup.
-- `src/main/java/dev/jdha/javaapi/HealthController.java` -- the endpoint and the
+- `src/main/java/dev/jdha/javaapi/HealthController.java`: the endpoint and the
   `Health` record it answers with.
-- `src/main/java/dev/jdha/javaapi/LambdaRuntimeReady.java` -- the `/ready`
+- `src/main/java/dev/jdha/javaapi/LambdaRuntimeReady.java`: the `/ready`
   callback, the only piece that is about the platform rather than about HTTP.
-- `src/main/resources/application.properties` -- the static configuration,
+- `src/main/resources/application.properties`: the static configuration,
   including the backend name.
-- `server.sh` -- the JVM launcher the shim execs, copied in as `server`. The
+- `server.sh`: the JVM launcher the shim execs, copied in as `server`. The
   native build has no equivalent; its `server` is the binary.
-- `Dockerfile` / `Dockerfile.aot` -- the two builds, each exporting only its zip.
-- `smoke.sh` -- boots an assembled bundle and asserts `/health` byte for byte.
+- `Dockerfile` / `Dockerfile.aot`: the two builds, each exporting only its zip.
+- `smoke.sh`: boots an assembled bundle and asserts `/health` byte for byte.
   Takes the expected backend name, so it works for either build.
 
 ## Run
@@ -153,7 +153,7 @@ image it generates is not small. It buys startup time, not size. The JVM zip is 
   build in the repo, since `native-image` compiles every reachable class ahead of
   time.
 - Both builds run `smoke.sh` in their container. The bundle is a linux-arm64
-  tree, so that is the only place the shipped runtime is exercised -- do not
+  tree, so that is the only place the shipped runtime is exercised. Do not
   delete the smoke step.
 
 ## Notes
@@ -161,13 +161,14 @@ image it generates is not small. It buys startup time, not size. The JVM zip is 
 - Everything must be built for **linux/arm64** (Web Functions are Arm64 only).
 - `server.sh` sets `-XX:MaxRAMPercentage=75`. The Web Function environment is
   2 GB and the JVM's container-aware default is 25%, which would cap the heap at
-  512 MB. Note that Java 25 also made G1 the default collector in *all*
-  environments (JEP 523), where a container this size used to get Serial; if a
-  real workload wants the old behaviour back it is `-XX:+UseSerialGC`.
+  512 MB. The GC default does not change here: the pre-27 heuristic already
+  picked G1 at two or more CPUs and 1792 MB or more, and Java 27's JEP 523 makes
+  G1 the default in every environment. A workload that wants Serial back asks
+  for it with `-XX:+UseSerialGC`.
 - Virtual threads are on (`spring.threads.virtual.enabled` in
   `application.properties`). It is the right default for a servlet app on this
-  platform -- a Web Function keeps many concurrent requests in one execution
-  environment -- but this handler does no I/O, so the demo cannot measure the win.
+  platform: a Web Function keeps many concurrent requests in one execution
+  environment. But this handler does no I/O, so the demo cannot measure the win.
 - The `/ready` POST uses `java.net.http.HttpClient` rather than Spring's
   `RestClient`. It is plumbing standing in for the Lambda runtime interface
   client, not application HTTP, so it does not want a framework client's beans
@@ -178,8 +179,8 @@ image it generates is not small. It buys startup time, not size. The JVM zip is 
   rather than an obvious one.
 - The AOT build runs `mvn -Pnative native:compile`, naming the goal rather than
   binding it to a lifecycle phase, which is what Spring Boot's own docs do. The
-  tempting alternative -- binding `compile-no-fork` to `package` in `pom.xml` --
-  is wrong here, because this pom is shared with the JVM build: that execution
+  tempting alternative, binding `compile-no-fork` to `package` in `pom.xml`, is
+  wrong here, because this pom is shared with the JVM build: that execution
   would run there too, in an image with no `native-image`, and fail. It also
   sidesteps the parent's `native` profile, which only *configures*
   `native-image` through pluginManagement; a plugin that is never declared never

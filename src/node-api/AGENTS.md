@@ -1,7 +1,8 @@
 # AGENTS.md
 
-A [Hono](https://hono.dev) app running on Node.js. The Hono app is `src/app.ts` (default export);
-`src/index.ts` serves it with `@hono/node-server` on port 3000.
+A [Hono](https://hono.dev) app running on Node.js. The whole app is `src/index.ts`: it builds the
+Hono instance, answers `GET /health` with `{"status":"Ok","backend":"node"}`, and serves it with
+`@hono/node-server` on port 3000.
 
 ## Run
 
@@ -11,13 +12,15 @@ The commands below are written for npm. If the project has a `pnpm-lock.yaml`, `
 - `npm install`
 - `npm run dev` starts the server with tsx in watch mode. It is for humans; do not start it to check
   your work.
-- `npm run build` compiles with tsc to `dist/`; `npm start` runs it.
+- `npm run build` bundles `src/index.ts` with esbuild to `dist/index.js`; `npm start` runs it. The
+  zip is the `dist/` directory. Node is the runtime Lambda already boots, so there is no execve shim
+  here (unlike the other backends).
 
 ## Hono CLI
 
 Run `npx hono --help` first, and use the CLI instead of a dev server.
-The app is not at the default path, so pass `src/app.ts` to every command:
-`npx hono routes src/app.ts`.
+The app is at the default path, so `npx hono routes` finds it; pass the file explicitly when a
+command needs a path: `npx hono routes src/index.ts`.
 
 ## Docs
 

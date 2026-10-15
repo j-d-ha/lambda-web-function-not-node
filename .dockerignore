@@ -1,5 +1,6 @@
-# Build context for src/python-api/Dockerfile is the repo root, so trim it down
-# to what the Dockerfile actually COPYs. Without this the daemon would ship
+# The container builds (src/python-api, src/DotnetApi, src/blazor, src/java-api,
+# src/kotlin-api) use the repo root as build context, so trim it to what their
+# Dockerfiles actually COPY. Without this the daemon would ship
 # infra/node_modules and build/ (tens of MB) on every build.
 .git
 .idea

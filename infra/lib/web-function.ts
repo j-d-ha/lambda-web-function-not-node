@@ -18,7 +18,7 @@ import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 
 /**
  * Runtimes Lambda Web Functions support.
- * Node.js only today — widen as AWS adds more.
+ * Node.js only today. Widen as AWS adds more.
  */
 export enum WebFunctionRuntime {
   /** Node.js 24.x, the only runtime currently supported by Web Functions. */
@@ -29,7 +29,7 @@ export enum WebFunctionRuntime {
 export enum WebFunctionAuthType {
   /** Only SigV4-signed IAM callers can reach the endpoint. */
   IAM_AUTH = "IamAuth",
-  /** Public endpoint — the app must implement its own auth. */
+  /** Public endpoint: the app must implement its own auth. */
   APPLICATION_MANAGED = "ApplicationManaged",
 }
 
@@ -72,8 +72,8 @@ export interface WebFunctionProps {
 
   /**
    * Regions to serve the endpoint from. Required when endpointType is
-   * MULTI_REGION or PER_REGION — at least one region other than the home
-   * region; the home region alone is not accepted.
+   * MULTI_REGION or PER_REGION: a non-empty list. The construct checks only
+   * that it is non-empty; Region validity is enforced at deploy time.
    */
   readonly regions?: Array<string>;
 
@@ -124,7 +124,7 @@ export interface WebFunctionProps {
   readonly logRetention?: RetentionDays;
 
   /**
-   * Log group removal policy. Defaults to DESTROY — logs go away with the
+   * Log group removal policy. Defaults to DESTROY: logs go away with the
    * stack. Set RETAIN to keep them.
    */
   readonly logRemovalPolicy?: RemovalPolicy;
@@ -192,7 +192,7 @@ export class WebFunction extends Construct {
       }
     }
 
-    // 1. Versioned code bucket — versioning is required so the revision can
+    // 1. Versioned code bucket: versioning is required so the revision can
     //    pin an immutable object version.
     this.bucket =
       props.codeBucket ??
@@ -220,7 +220,7 @@ export class WebFunction extends Construct {
       }
     }
 
-    // 2. Execution role — trusted by lambda.amazonaws.com, logs to CloudWatch.
+    // 2. Execution role: trusted by lambda.amazonaws.com, logs to CloudWatch.
     this.role =
       props.role ??
       new Role(this, "ExecutionRole", {
@@ -250,8 +250,8 @@ export class WebFunction extends Construct {
 
     // 4. Zip the source dir and upload as a single unextracted object.
     //    extract: false keeps the zip 1:1, which is what the revision wants.
-    //    prune: false because every web function shares one code bucket —
-    //    pruning would delete the other functions' zips.
+    //    prune: false because every web function shares one code bucket.
+    //    Pruning would delete the other functions' zips.
     const deployment = new BucketDeployment(this, "CodeDeployment", {
       sources: [Source.asset(props.sourcePath)],
       destinationBucket: this.bucket,
@@ -259,14 +259,14 @@ export class WebFunction extends Construct {
       prune: false,
     });
 
-    // 5. The web function itself — just a name.
+    // 5. The web function itself.
     this.function = new CfnWebFunction(this, "Function", {
       functionName: props.functionName,
       tags: props.tags,
     });
 
     // 6. The revision pins the exact S3 object version BucketDeployment just
-    //    uploaded — a code change gets a new version, so a redeploy is picked
+    //    uploaded: a code change gets a new version, so a redeploy is picked
     //    up even under the same key.
     this.revision = new CfnWebFunctionRevision(this, "Revision", {
       functionName: props.functionName, // bare name, never an ARN

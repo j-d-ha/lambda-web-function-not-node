@@ -26,9 +26,9 @@ import kotlinx.serialization.Serializable
  * `/2025-09-01/ready` itself once Netty is bound.
  *
  * The payload is a serialized data class, not a hand-written string, so this
- * backend answers the way the other nine do: Ktor's content negotiation and
- * kotlinx.serialization on the way out, the same shape Go marshals and ASP.NET
- * and Spring serialize.
+ * backend answers the way every other backend here does: Ktor's content
+ * negotiation and kotlinx.serialization on the way out, the same shape Go
+ * marshals and ASP.NET and Spring serialize.
  */
 
 /** The response shape every backend in this repo shares. */
@@ -38,8 +38,12 @@ data class Health(val status: String, val backend: String)
 fun main() {
     // AWS_LAMBDA_HTTP_ENDPOINT is host:port.
     val endpoint = System.getenv("AWS_LAMBDA_HTTP_ENDPOINT") ?: "0.0.0.0:3000"
-    val host = endpoint.substringBeforeLast(':')
-    val port = endpoint.substringAfterLast(':').toInt()
+    val split = endpoint.lastIndexOf(':')
+    require(split > 0 && split < endpoint.length - 1) {
+        "AWS_LAMBDA_HTTP_ENDPOINT must be host:port, got: $endpoint"
+    }
+    val host = endpoint.substring(0, split)
+    val port = endpoint.substring(split + 1).toInt()
 
     val server = embeddedServer(Netty, host = host, port = port) {
         install(ContentNegotiation) { json() }

@@ -9,9 +9,9 @@ server-rendered page plus a WebAssembly client instead of a JSON API.
 Two projects, because a Blazor Web App with WebAssembly interactivity is two
 apps that ship together:
 
-- `src/blazor/BlazorApp/` — the server. ASP.NET Core host, static server-side
+- `src/blazor/BlazorApp/`: the server. ASP.NET Core host, static server-side
   rendering (static SSR), the `/api/hello` endpoint, and the `/ready` callback.
-- `src/blazor/BlazorApp.Client/` — the WebAssembly client. Runs in the browser,
+- `src/blazor/BlazorApp.Client/`: the WebAssembly client. Runs in the browser,
   calls `/api/hello` on its own origin.
 
 Both sit under `src/blazor/` because they are one deliverable: one zip, one Web
@@ -67,7 +67,7 @@ client bundle changes:
 WASM AOT is **not** NativeAOT, and it does not force source-generated JSON the
 way the server-side AOT does. Verified against the SDK:
 
-- The server project is `PublishTrimmed=false` — Blazor's component rendering is
+- The server project is `PublishTrimmed=false`: Blazor's component rendering is
   reflection-based, exactly as in `src/DotnetApi`.
 - The **client** project is trimmed by the Blazor SDK in Release, but with
   `TrimMode=partial` and, decisively,
@@ -84,10 +84,9 @@ rather than reasoned about: `build:blazor-aot` ships with
 `WasmStripILAfterAOT=true`, and its `BackendProbe` still deserializes
 `/api/hello` and re-fetches on click in the browser.
 
-That is the finding worth keeping: **IL stripping after AOT did not break
-reflection JSON here.** If someone later sets `TrimMode=full`, or a reflected
-member does get stripped, *that* is when a `JsonSerializerContext` becomes
-necessary — not before.
+**IL stripping after AOT did not break reflection JSON here.** If someone later
+sets `TrimMode=full`, or a reflected member does get stripped, *that* is when a
+`JsonSerializerContext` becomes necessary, not before.
 
 ## Size
 
@@ -104,8 +103,8 @@ self-contained server; only `wwwroot/_framework` differs:
 The client bundle roughly doubles, matching the documented "about twice the
 size" for AOT. The compiled code lands in `dotnet.native.wasm`, which is why the
 app's own `BlazorApp.Client.wasm` stays ~10 KB either way. Precompressed
-`.br`/`.gz` variants ship beside every file — `dotnet.native.wasm` is 3.5 MB
-Brotli in the AOT build against 0.9 MB interpreted — so the transfer cost is
+`.br`/`.gz` variants ship beside every file (`dotnet.native.wasm` is 3.5 MB
+Brotli in the AOT build against 0.9 MB interpreted), so the transfer cost is
 well under the unzipped figure wherever the host serves them correctly.
 
 `BlazorDebugProxy` (Roslyn, ~10 MB unzipped) is dropped with
@@ -115,24 +114,24 @@ than in the project file keeps local WebAssembly debugging working.
 
 ## Layout
 
-- `src/blazor/BlazorApp/Program.cs` — host, endpoints, and the `/ready` POST. No
+- `src/blazor/BlazorApp/Program.cs`: host, endpoints, and the `/ready` POST. No
   `UseHttpsRedirection`/`UseHsts`: the endpoint is HTTPS-only and terminates TLS
   in front of the app, which only ever sees plain HTTP.
-- `src/blazor/BlazorApp/Components/Pages/Home.razor` — the page. Static SSR, so the
+- `src/blazor/BlazorApp/Components/Pages/Home.razor`: the page. Static SSR, so the
   values under "Rendered on the server" were produced by the Web Function.
-- `src/blazor/BlazorApp.Client/Pages/BackendProbe.razor` — the interactive component.
+- `src/blazor/BlazorApp.Client/Pages/BackendProbe.razor`: the interactive component.
   Prerendering is **off** on purpose (`prerender: false`): with it on,
   `OnInitializedAsync` also runs on the server, where no `HttpClient` is
   registered for the client project. Off, every call is unambiguously a
   browser → Web Function round trip.
-- `src/blazor/BlazorApp.Client/HelloResponse.cs` — the `/api/hello` contract, shared by
+- `src/blazor/BlazorApp.Client/HelloResponse.cs`: the `/api/hello` contract, shared by
   both sides. It lives in the client project because the server already
   references it.
-- `wwwroot/app.css` — hand-written. No Bootstrap, no npm, no CDN: this repo runs
+- `wwwroot/app.css`: hand-written. No Bootstrap, no npm, no CDN: this repo runs
   no Node at request time and has no front-end build step.
-- `Dockerfile` — the build. Self-contained publish on `linux/arm64`, then
+- `Dockerfile`: the build. Self-contained publish on `linux/arm64`, then
   `smoke.sh`, then zip; only the zip is exported.
-- `smoke.sh` — boots the bundle and asserts `/health`, that the home page
+- `smoke.sh`: boots the bundle and asserts `/health`, that the home page
   actually renders, that `/api/hello` answers, and that `_framework` shipped.
 
 ## Run
@@ -141,7 +140,7 @@ than in the project file keeps local WebAssembly debugging working.
   profile sets `ASPNETCORE_ENVIRONMENT=Development`, which is what makes the
   static web assets resolve: without it an *unpublished* run falls back to
   Production, where the SDK's static-asset loader is off and `_framework`
-  requests 500. The published bundle never has that problem — its assets are
+  requests 500. The published bundle never has that problem: its assets are
   on disk beside the apphost.
 - It reads `AWS_LAMBDA_HTTP_ENDPOINT` (default: Kestrel's, or the launch
   profile's port) and, with no `AWS_LAMBDA_RUNTIME_API`, skips the `/ready`
@@ -152,7 +151,7 @@ than in the project file keeps local WebAssembly debugging working.
   `docker buildx build --platform linux/arm64`. Needs Docker and network access
   (the build installs the `wasm-tools` workload).
 - The build runs `smoke.sh` in the container. The server is a linux-arm64 binary
-  tree, so that is the only place the shipped runtime is exercised — do not
+  tree, so that is the only place the shipped runtime is exercised. Do not
   delete the smoke step.
 
 ## Notes
