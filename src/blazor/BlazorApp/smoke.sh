@@ -34,12 +34,16 @@ body=$(curl -fsS "$BASE/health")
 curl -fsS "$BASE/" | grep -q 'Blazor on a Lambda Web Function' \
   || fail "home page did not render"
 
-# The endpoint the interactive WebAssembly client calls from the browser.
+# The endpoint the interactive WebAssembly client calls. The whole shape is
+# asserted, not just one field: the client deserializes these exact property
+# names, so renaming one would break the browser without failing anything else.
 api=$(curl -fsS "$BASE/api/hello")
-case "$api" in
-  *'"backend":"blazor"'*) : ;;
-  *) fail "unexpected /api/hello body: $api" ;;
-esac
+for field in '"status":"Ok"' '"backend":"blazor"' '"server":"' '"servedAt":"'; do
+  case "$api" in
+    *"$field"*) : ;;
+    *) fail "unexpected /api/hello body: $api" ;;
+  esac
+done
 
 # The WebAssembly bundle the browser downloads and boots: the loader the page
 # references, and the runtime binary it pulls in. (There is no blazor.boot.json

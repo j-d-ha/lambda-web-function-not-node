@@ -5,16 +5,20 @@
     HttpClient is registered for the client project.
 *@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using Microsoft.Extensions.Logging
 @inject HttpClient Http
+@inject ILogger<BackendProbe> Logger
 
 <div class="probe">
     @if (_loading && _hello is null)
     {
         <p class="probe-status">Calling <code>/api/hello</code>&hellip;</p>
     }
-    else if (_error is not null)
+    else if (_failed)
     {
-        <p class="probe-status is-error">@_error</p>
+        <p class="probe-status is-error">
+            Could not reach <code>/api/hello</code>. The reason is in the browser console.
+        </p>
     }
     else if (_hello is not null)
     {
@@ -42,7 +46,7 @@
 
 @code {
     private HelloResponse? _hello;
-    private string? _error;
+    private bool _failed;
     private bool _loading;
 
     protected override Task OnInitializedAsync() => FetchAsync();
@@ -50,14 +54,17 @@
     private async Task FetchAsync()
     {
         _loading = true;
-        _error = null;
+        _failed = false;
         try
         {
             _hello = await Http.GetFromJsonAsync<HelloResponse>("/api/hello");
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            // Say that the round trip failed without echoing an exception
+            // message into the page; the detail goes to the browser console.
+            Logger.LogError(ex, "GET /api/hello failed");
+            _failed = true;
         }
         finally
         {

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A **Blazor Web App** on a
+Everything under `src/blazor/`: a **Blazor Web App** on a
 [Lambda Web Function](https://docs.aws.amazon.com/lambda/latest/dg/web-functions.html).
 It is the UI sibling of `src/DotnetApi`: same Web Function contract, same
 untrimmed self-contained .NET runtime in the zip, but what it serves is a
@@ -137,9 +137,17 @@ than in the project file keeps local WebAssembly debugging working.
 
 ## Run
 
-- `dotnet run --project src/blazor/BlazorApp` runs it locally. It reads
-  `AWS_LAMBDA_HTTP_ENDPOINT` (default: Kestrel's) and, with no
-  `AWS_LAMBDA_RUNTIME_API`, skips the `/ready` call.
+- `dotnet run --project src/blazor/BlazorApp` runs it locally. The launch
+  profile sets `ASPNETCORE_ENVIRONMENT=Development`, which is what makes the
+  static web assets resolve: without it an *unpublished* run falls back to
+  Production, where the SDK's static-asset loader is off and `_framework`
+  requests 500. The published bundle never has that problem — its assets are
+  on disk beside the apphost.
+- It reads `AWS_LAMBDA_HTTP_ENDPOINT` (default: Kestrel's, or the launch
+  profile's port) and, with no `AWS_LAMBDA_RUNTIME_API`, skips the `/ready`
+  call. That variable also switches the content root to the apphost's
+  directory, so the app behaves the same whether it is started from the zip
+  root or not.
 - `task build:blazor` / `task build:blazor-aot` build the zips with
   `docker buildx build --platform linux/arm64`. Needs Docker and network access
   (the build installs the `wasm-tools` workload).

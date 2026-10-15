@@ -12,17 +12,21 @@ using BlazorApp.Components;
 // reflection-based (see AGENTS.md). The WebAssembly client is a separate
 // project and is trimmed by the Blazor SDK on its own.
 //
-// ContentRootPath is pinned to the executable's directory rather than left at
-// the current working directory: the static web assets (wwwroot, _framework)
-// are resolved from it, and the app must not care where it was started from.
+// In the Web Function bundle the apphost sits at the zip root next to wwwroot,
+// so the content root is pinned to it and the static web assets resolve
+// whatever the working directory happens to be. Outside Lambda (dotnet run,
+// dotnet watch) the default is left alone, which keeps the dev-time web root at
+// the project directory instead of an output folder with no wwwroot in it.
+var httpEndpoint = Environment.GetEnvironmentVariable("AWS_LAMBDA_HTTP_ENDPOINT");
+var inWebFunction = httpEndpoint is { Length: > 0 };
+
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
-    ContentRootPath = AppContext.BaseDirectory,
+    ContentRootPath = inWebFunction ? AppContext.BaseDirectory : null,
 });
 
 // Lambda tells the app where to listen through AWS_LAMBDA_HTTP_ENDPOINT.
-var httpEndpoint = Environment.GetEnvironmentVariable("AWS_LAMBDA_HTTP_ENDPOINT");
 if (httpEndpoint is { Length: > 0 })
     builder.Configuration["urls"] = $"http://{httpEndpoint}";
 

@@ -97,7 +97,7 @@ WebAssembly running in your browser.
 
 It deliberately does **not** use Interactive Server or Interactive Auto. Those
 hold a SignalR circuit open over a WebSocket, and Web Functions do not support
-WebSocket upgrades. See [`src/blazor/BlazorApp/AGENTS.md`](src/blazor/BlazorApp/AGENTS.md) for
+WebSocket upgrades. See [`src/blazor/AGENTS.md`](src/blazor/AGENTS.md) for
 the details and the deployment targets that do fit.
 
 `task build` produces two zips from that one source:

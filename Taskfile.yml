@@ -76,11 +76,11 @@ tasks:
   build:blazor:
     desc: Build the Blazor Web App (interpreted WebAssembly) into build/blazor-web.zip
     cmds:
-      # One project, two build tasks: AOT is a publish property, not different
-      # code, so the AOT variant below is the same source with the flag flipped.
-      # The server is a self-contained linux-arm64 publish either way; only the
-      # WebAssembly client bundle differs. Needs Docker and network access (the
-      # build installs the wasm-tools workload).
+      # One app, two projects, two build tasks: AOT is a publish property, not
+      # different code, so the AOT variant below is the same source with the
+      # flag flipped. The server is a self-contained linux-arm64 publish either
+      # way; only the WebAssembly client bundle differs. Needs Docker and
+      # network access (the build installs the wasm-tools workload).
       - rm -f '{{.ROOT_DIR}}/{{.BUILD_DIR}}/blazor-web.zip'
       - docker buildx build --platform linux/arm64 --target export --output 'type=local,dest={{.ROOT_DIR}}/{{.BUILD_DIR}}' --build-arg ZIP_NAME=blazor-web.zip -f '{{.ROOT_DIR}}/src/blazor/BlazorApp/Dockerfile' '{{.ROOT_DIR}}'
 
