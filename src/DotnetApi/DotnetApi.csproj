@@ -11,7 +11,7 @@
       model binding and System.Text.Json serialization, and callers may use
       reflection over their own types. So no NativeAOT and no trimming: every
       assembly and its metadata ships intact. Everything below that remains is
-      the size budget (see README/AGENTS.md for measured numbers).
+      the size budget (see AGENTS.md for measured numbers).
     -->
     <PublishTrimmed>false</PublishTrimmed>
     <PublishReadyToRun>false</PublishReadyToRun>

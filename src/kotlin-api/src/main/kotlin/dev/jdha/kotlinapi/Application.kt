@@ -26,9 +26,9 @@ import kotlinx.serialization.Serializable
  * `/2025-09-01/ready` itself once Netty is bound.
  *
  * The payload is a serialized data class, not a hand-written string, so this
- * backend answers the way the other nine do: Ktor's content negotiation and
- * kotlinx.serialization on the way out, the same shape Go marshals and ASP.NET
- * and Spring serialize.
+ * backend answers the way every other backend here does: Ktor's content
+ * negotiation and kotlinx.serialization on the way out, the same shape Go
+ * marshals and ASP.NET and Spring serialize.
  */
 
 /** The response shape every backend in this repo shares. */

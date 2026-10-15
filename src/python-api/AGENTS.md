@@ -2,10 +2,10 @@
 
 A [FastAPI](https://fastapi.tiangolo.com) app on
 a [Lambda Web Function](https://docs.aws.amazon.com/lambda/latest/dg/web-functions.html).
-Web Functions only speak Node.js, so the zip holds three things: `index.js`, the
-shared execve shim from `src/node-wrapper/`, the `server` launcher, and the
-CPython runtime the launcher needs under `python/`. Unlike the Go and .NET
-backends, Python is not a single static binary — there is no Python in the Web
+Web Functions only speak Node.js, so the zip holds three things: the shared
+execve shim from `src/node-wrapper/` as `index.js`, the `server` launcher, and
+the CPython runtime the launcher needs under `python/`. Unlike the Go and .NET
+backends, Python is not one static binary: there is no Python in the Web
 Function environment, so `task build:python-api` bundles a
 [python-build-standalone](https://github.com/astral-sh/python-build-standalone)
 interpreter next to the code.
@@ -48,7 +48,7 @@ cross-platform resolution on the host.
 - That build also runs `uv run python -m unittest` and `smoke.sh`, which boots
   the assembled bundle and checks `/health`. The bundle only runs on the target
   architecture, so this is the only place the interpreter and wheels are
-  actually exercised — do not delete the smoke step without putting the check
+  actually exercised: do not delete the smoke step without putting the check
   somewhere else.
 
 ## Notes
@@ -75,5 +75,6 @@ cross-platform resolution on the host.
 - Preserve the smoke run after trimming: it is the only thing that proves the
   trimmed interpreter still boots.
 - Dependency changes go through `uv lock` (or `uv add`); the build runs `uv sync --frozen`, so nothing outside the lock can reach the zip.
-- The packaged zip is ~18 MB zipped / ~52 MB unzipped, well under Lambda's
-  250 MB unzipped limit. Keep an eye on it if dependencies grow.
+- The packaged zip is ~17 MB zipped / ~48 MB unzipped, well under the Web
+  Function revision's 512 MB unzipped limit. Keep an eye on it if dependencies
+  grow.

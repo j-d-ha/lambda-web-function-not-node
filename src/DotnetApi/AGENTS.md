@@ -22,16 +22,16 @@ Reflection removes every slimming lever: both `PublishTrimmed` and NativeAOT
 strip the metadata reflection reads, and even partial trimming only preserves
 *System.Text.Json* reflection, not arbitrary reflection. So this is a
 self-contained, untrimmed publish. Measured on net11.0 for `linux-arm64`:
-**~115 MB unzipped / ~45 MB zipped** (`PublishSingleFile` is ~42 MB zipped —
-not worth the startup decompression for the difference). Well under the 512 MB
+**~115 MB unzipped / ~45 MB zipped** (`PublishSingleFile` is ~42 MB zipped, not
+worth the startup decompression for the difference). Well under the 512 MB
 unzipped deployment-package limit.
 
 What remains is applied in the `.csproj` and all of it keeps reflection working:
 
-- `InvariantGlobalization=true` — drops ICU (~30 MB unzipped).
-- `DebugType=none` / `DebugSymbols=false` — no `.pdb`.
-- `SatelliteResourceLanguages=en` — no localized resource satellites.
-- `PublishReadyToRun=false` — R2R would add tens of MB.
+- `InvariantGlobalization=true`: drops ICU (~30 MB unzipped).
+- `DebugType=none` / `DebugSymbols=false`: no `.pdb`.
+- `SatelliteResourceLanguages=en`: no localized resource satellites.
+- `PublishReadyToRun=false`: R2R would add tens of MB.
 
 The next real lever, if it is ever needed, is dropping ASP.NET Core for
 `System.Net.HttpListener` on the base runtime alone (~33 MB zipped), at the cost
@@ -39,14 +39,14 @@ of routing, DI and the rest of the framework.
 
 ## Layout
 
-- `Program.cs` — the whole app. Deliberately uses the reflection-based JSON
+- `Program.cs`: the whole app. Deliberately uses the reflection-based JSON
   serializer (no `JsonSerializerContext`), so a trimmed or AOT build would fail
   loudly rather than silently change behaviour.
-- `DotnetApi.csproj` — `AssemblyName=server` so the apphost matches the shim's
+- `DotnetApi.csproj`: `AssemblyName=server` so the apphost matches the shim's
   contract, plus the size properties above.
-- `Dockerfile` — the build. Runs the self-contained publish on `linux/arm64`,
+- `Dockerfile`: the build. Runs the self-contained publish on `linux/arm64`,
   copies the shim in, runs `smoke.sh`, then zips and exports only the zip.
-- `smoke.sh` — boots the assembled bundle and asserts `/health` byte for byte.
+- `smoke.sh`: boots the assembled bundle and asserts `/health` byte for byte.
 
 ## Run
 
@@ -58,7 +58,7 @@ of routing, DI and the rest of the framework.
   export stage copies out only `build/dotnet-api.zip`. Needs Docker.
 - That build also runs `smoke.sh` in the container. The bundle is a
   linux-arm64 binary tree, so this is the only place the shipped runtime is
-  actually exercised — do not delete the smoke step.
+  actually exercised: do not delete the smoke step.
 
 ## Notes
 

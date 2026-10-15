@@ -161,9 +161,10 @@ image it generates is not small. It buys startup time, not size. The JVM zip is 
 - Everything must be built for **linux/arm64** (Web Functions are Arm64 only).
 - `server.sh` sets `-XX:MaxRAMPercentage=75`. The Web Function environment is
   2 GB and the JVM's container-aware default is 25%, which would cap the heap at
-  512 MB. Note that Java 25 also made G1 the default collector in *all*
-  environments (JEP 523), where a container this size used to get Serial; if a
-  real workload wants the old behaviour back it is `-XX:+UseSerialGC`.
+  512 MB. The GC default does not change here: the pre-27 heuristic already
+  picked G1 at two or more CPUs and 1792 MB or more, and Java 27's JEP 523 makes
+  G1 the default in every environment. A workload that wants Serial back asks
+  for it with `-XX:+UseSerialGC`.
 - Virtual threads are on (`spring.threads.virtual.enabled` in
   `application.properties`). It is the right default for a servlet app on this
   platform -- a Web Function keeps many concurrent requests in one execution

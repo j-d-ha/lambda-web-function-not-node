@@ -3,7 +3,6 @@
 version: '3'
 
 vars:
-  GREETING: Hello, world!
   BUILD_DIR: build
   # Shared execve shim every non-Node backend zips in as index.js.
   NODE_WRAPPER: src/node-wrapper/index.js

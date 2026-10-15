@@ -71,7 +71,7 @@ The non-Node backends follow it:
   `AWS_LAMBDA_HTTP_ENDPOINT` is set, binds to it and POSTs `/ready` after
   `StartAsync`. It is published with [NativeAOT](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/),
   so there is no .NET runtime in the environment either. It is the smallest
-  backend here, and it gives up reflection to get there.
+  .NET backend here, and it gives up reflection to get there.
 - **ASP.NET, managed .NET runtime** ([`src/DotnetApi/Program.cs`](src/DotnetApi/Program.cs))
   is the same shape but drops AOT and trimming on purpose, because it explicitly
   needs reflection: the zip carries the whole .NET runtime and every framework
@@ -178,7 +178,7 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   publishes, smokes and packs the bundle on `linux/arm64` so the runtime that
   ships is the one that was exercised. Reflection means no trimming and no AOT,
   so this zip carries the whole .NET runtime: ~115 MB unzipped / ~45 MB zipped,
-  against ~10 MB for the NativeAOT build.
+  against ~13 MB unzipped / ~5.7 MB zipped for the NativeAOT build.
 - The **Blazor** build ([`src/blazor/BlazorApp/Dockerfile`](src/blazor/BlazorApp/Dockerfile))
   also runs on `linux/arm64`, and installs the `wasm-tools` workload inside the
   image: publishing a Blazor WebAssembly client IL-links the runtime, and the
@@ -214,7 +214,7 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
 
 Measured from `task build` output on `linux/arm64`, in MiB. The zipped number is
 what a revision pins in S3; the unzipped number is what Lambda extracts and what
-counts against the **250 MB unzipped limit** for each function.
+counts against the **512 MB unzipped limit** for each Web Function revision.
 
 | Backend                     | Zipped | Unzipped | Files | What the bulk is                               |
 | --------------------------- | -----: | -------: | ----: | ---------------------------------------------- |
@@ -256,7 +256,7 @@ task deploy
 ```
 
 Builds first, then runs `cdk deploy` from `infra/`. The stack deploys one Web
-Function per backend (`node-api-web`, `go-api-web`, `dotnet-api-web`,
+Function per artifact (`node-api-web`, `go-api-web`, `dotnet-api-web`,
 `dotnet-aot-api-web`, `blazor-web`, `blazor-aot-web`, `python-api-web`,
 `java-api-web`, `java-aot-api-web`, `kotlin-api-web`) and
 prints an endpoint URL for each. You need AWS credentials
