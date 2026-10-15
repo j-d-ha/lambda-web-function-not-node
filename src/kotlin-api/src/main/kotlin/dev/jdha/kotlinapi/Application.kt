@@ -38,8 +38,12 @@ data class Health(val status: String, val backend: String)
 fun main() {
     // AWS_LAMBDA_HTTP_ENDPOINT is host:port.
     val endpoint = System.getenv("AWS_LAMBDA_HTTP_ENDPOINT") ?: "0.0.0.0:3000"
-    val host = endpoint.substringBeforeLast(':')
-    val port = endpoint.substringAfterLast(':').toInt()
+    val split = endpoint.lastIndexOf(':')
+    require(split > 0 && split < endpoint.length - 1) {
+        "AWS_LAMBDA_HTTP_ENDPOINT must be host:port, got: $endpoint"
+    }
+    val host = endpoint.substring(0, split)
+    val port = endpoint.substring(split + 1).toInt()
 
     val server = embeddedServer(Netty, host = host, port = port) {
         install(ContentNegotiation) { json() }

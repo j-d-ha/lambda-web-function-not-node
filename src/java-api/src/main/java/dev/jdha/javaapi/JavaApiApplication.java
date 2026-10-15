@@ -37,6 +37,10 @@ public class JavaApiApplication {
         String endpoint = System.getenv("AWS_LAMBDA_HTTP_ENDPOINT");
         if (endpoint != null && !endpoint.isBlank()) {
             int split = endpoint.lastIndexOf(':');
+            if (split < 0) {
+                throw new IllegalArgumentException(
+                        "AWS_LAMBDA_HTTP_ENDPOINT must be host:port, got: " + endpoint);
+            }
             properties.put("server.address", endpoint.substring(0, split));
             properties.put("server.port", endpoint.substring(split + 1));
         }
