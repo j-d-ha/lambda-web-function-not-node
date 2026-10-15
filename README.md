@@ -190,7 +190,7 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   locked dependencies, the unit test runs, then the bundle is laid out as
   Lambda sees it and smoked before being zipped. Docker's layer cache holds the
   interpreter and dependency layers, and only the zip is exported. You need
-  Docker and network access. The zip is ~18 MB zipped / ~52 MB unzipped.
+  Docker and network access. The zip is ~17 MB zipped / ~48 MB unzipped.
 - The **Java** builds add two more container-only toolchains. `src/java-api`
   and `src/kotlin-api` are Maven builds that carry a `jlink`-trimmed JRE, the
   Java equivalent of the Python backend's bundled interpreter. `src/java-aot-api`
@@ -198,6 +198,45 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   links glibc dynamically and so has to be built against the same 2.34 Amazon
   Linux 2023 ships. See [`src/java-api/AGENTS.md`](src/java-api/AGENTS.md) and
   [`src/java-aot-api/AGENTS.md`](src/java-aot-api/AGENTS.md).
+
+## Package sizes
+
+Measured from `task build` output on `linux/arm64`, in MiB. The zipped number is
+what a revision pins in S3; the unzipped number is what Lambda extracts and what
+counts against the **250 MB unzipped limit** for each function.
+
+| Backend                     | Zipped | Unzipped | Files | What the bulk is                               |
+| --------------------------- | -----: | -------: | ----: | ---------------------------------------------- |
+| Node.js (reference)         |  23 KB |    90 KB |     2 | the app and the shim                           |
+| Go                          |    4.5 |      8.3 |     2 | one static binary                              |
+| ASP.NET (NativeAOT)         |    5.7 |     13.0 |     3 | one static binary                              |
+| Python (FastAPI)            |   17.1 |     47.7 | 1,623 | a relocatable CPython plus the locked wheels   |
+| Java (GraalVM native-image) |   26.8 |     79.6 |     2 | one binary, every reachable Spring class in it |
+| ASP.NET (.NET runtime)      |   44.8 |    115.0 |   334 | the whole .NET runtime, untrimmed              |
+| Java (Spring Boot, JVM)     |   55.6 |     81.5 |   195 | a `jlink`'d JRE plus the app jar               |
+| Blazor (interpreted WASM)   |   56.8 |    135.5 |   504 | .NET plus the WebAssembly client               |
+| Kotlin (Ktor, JVM)          |   61.8 |     87.3 |   195 | the same JRE plus a shaded fat jar             |
+| Blazor (AOT WASM)           |   66.6 |    154.8 |   504 | as above, plus the Emscripten-compiled client  |
+
+All ten zipped come to ~340 MB and unzipped to ~723 MB. The unzipped total is the
+one that matters for storage: each function gets its own extracted copy, so that
+is roughly the footprint of the whole demo once every backend is deployed. Blazor
+AOT is the closest to the ceiling, at ~155 MB unzipped.
+
+Two things worth knowing about what Lambda actually stores:
+
+- The code bucket is **versioned**, because a revision pins one exact object
+  version. Every deploy of any backend uploads a new version of its zip rather
+  than replacing the old one, so a bucket that has been deployed to many times
+  holds every zip it has ever received. Nothing here cleans it up.
+- S3 holds the zipped bytes, so the bucket's usage tracks the **Zipped** column,
+  not the unzipped one.
+
+Read the Java pair together: the GraalVM build uploads less than half of what
+the JVM build does (27 MB against 56 MB) but extracts to almost the same size (80
+MB against 82 MB). Ahead-of-time compilation removes the JVM from the download;
+it does not remove the framework's code from the artifact. It buys startup time,
+not extract size.
 
 ## Deploy
 
