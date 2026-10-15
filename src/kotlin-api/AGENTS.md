@@ -20,12 +20,13 @@ Kotlin **2.4.21** and Ktor **3.6.0**, both current stable, compiled for JVM **25
 to match the JDK in the image and the other two JVM backends. The 2.5.0-Beta1
 prerelease is deliberately not used.
 
-One deliberate deviation from the Kotlin default: this builds with **Maven**,
-where a new Kotlin project would normally use Gradle. Maven shares a build tool
-and a base image with `src/java-api`, and what is under
-test here is the execve shim, not the build tool. Kotlin has no objection —
-`kotlin-maven-plugin` is supported and the compiler plugins are the same ones
-Gradle uses — but a reader expecting Gradle should know it was a choice.
+Gradle builds this, through the **wrapper committed with the project**
+(`gradlew` plus `gradle/wrapper/`), so the Gradle version — **9.8.1** — is a
+property of the repo rather than of whatever happens to be installed. That is
+also why the Docker build has a plain JDK base image and not a Gradle one: it
+runs `./gradlew`, the same command a person would. Versions live in
+`gradle/libs.versions.toml`, which is what `gradle init` produces for a new
+Kotlin project today.
 
 Measured for linux-arm64: **~93 MB unzipped / ~67 MB zipped**, of which
 `app.jar` is ~30 MB. The JRE dominates, exactly as it does in `src/java-api` —
@@ -34,15 +35,15 @@ negotiation and kotlinx.serialization account for ~5 MB of the jar.
 
 ## Layout
 
-- `pom.xml` — plain Maven, no Spring parent: Kotlin, `ktor-server-core` and
-  `ktor-server-netty`, content negotiation plus the kotlinx.serialization JSON
-  converter, `slf4j-simple` for the binding Ktor wants, and
-  `maven-shade-plugin` to fold them into one jar. `finalName=app` so the jar name
-  does not carry the version.
+- `build.gradle.kts` and `gradle/libs.versions.toml` — the build and the versions
+  it pins. `jvmToolchain` fixes the JDK rather than inheriting whatever is on
+  PATH, and the Ktor plugin supplies `buildFatJar`, the one task that produces
+  the single jar the zip carries.
+- `gradlew` and `gradle/wrapper/` — the committed wrapper.
 - `src/main/kotlin/dev/jdha/kotlinapi/Application.kt` — the whole app.
 - `server.sh` — the launcher the shim execs, copied in as `server`.
-- `Dockerfile` — the build. Runs Maven, `jlink` and the smoke on
-  `linux/arm64`, then exports only the zip.
+- `Dockerfile` — the build. Runs Gradle through the wrapper, then `jlink` and the
+  smoke, on `linux/arm64`, and exports only the zip.
 - `smoke.sh` — boots the assembled bundle and asserts `/health` byte for byte.
 
 ## Serialization
@@ -56,25 +57,21 @@ encoding. A literal would have been a byte-exact shortcut that made this the one
 backend whose response could drift from its own declaration.
 
 The kotlinx.serialization **compiler plugin** is what makes `@Serializable`
-real. It needs two entries in `pom.xml`, and missing either fails:
-
-- `<compilerPlugins><plugin>kotlinx-serialization</plugin>` on
-  `kotlin-maven-plugin`, without which the annotation compiles to nothing and
-  Ktor fails at runtime looking for a missing serializer.
-- the same name as a `<dependency>` of that plugin —
-  `org.jetbrains.kotlin:kotlin-maven-serialization`. Unlike the Gradle plugin,
-  `kotlin-maven-plugin` resolves compiler plugins from its **own** classpath, so
-  naming one that is not also declared there fails the build with
-  `Plugin not found: kotlinx-serialization`.
+real. Under Gradle that is one line,
+`alias(libs.plugins.kotlin.serialization)`; without it the annotation compiles to
+nothing and Ktor fails at runtime looking for a serializer. (The Maven build this
+replaced needed the plugin named twice, once under `<compilerPlugins>` and again
+as a dependency of `kotlin-maven-plugin`. Gradle takes one line.)
 
 The runtime library version is matched to the one Ktor 3.6.0 itself depends on
 (`1.11.0`), so the plugin and the library agree.
 
 ## Run
 
-- `mvn package` builds the fat jar and `java -jar target/app.jar` runs it
-  locally. It reads `AWS_LAMBDA_HTTP_ENDPOINT` (default `0.0.0.0:3000`) and, with
-  no `AWS_LAMBDA_RUNTIME_API`, skips the `/ready` call.
+- `./gradlew buildFatJar` builds the jar, and
+  `java -jar build/libs/kotlin-api-all.jar` runs it locally. It reads
+  `AWS_LAMBDA_HTTP_ENDPOINT` (default `0.0.0.0:3000`) and, with no
+  `AWS_LAMBDA_RUNTIME_API`, skips the `/ready` call.
 - `task build:kotlin-api` from the repo root builds the zip with
   `docker buildx build --platform linux/arm64` against `Dockerfile`, and the
   export stage copies out only `build/kotlin-api.zip`. Needs Docker and network

@@ -1,0 +1,22 @@
+[versions]
+# All current stable as of writing: Kotlin 2.4.21, Ktor 3.6.0, Gradle 9.8.1.
+# kotlinx-serialization is matched to the version Ktor 3.6.0 itself depends on,
+# so the compiler plugin and the runtime library agree.
+kotlin = "2.4.21"
+ktor = "3.6.0"
+kotlinx-serialization = "1.11.0"
+slf4j = "2.0.16"
+jvm = "25"
+
+[libraries]
+ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
+ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
+ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ktor = { id = "io.ktor.plugin", version.ref = "ktor" }

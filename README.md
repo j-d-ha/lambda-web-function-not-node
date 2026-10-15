@@ -192,9 +192,10 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   Lambda sees it and smoked before being zipped. Docker's layer cache holds the
   interpreter and dependency layers, and only the zip is exported. You need
   Docker and network access. The zip is ~17 MB zipped / ~48 MB unzipped.
-- The **Java** builds add two more container-only toolchains. `src/java-api`
-  and `src/kotlin-api` are Maven builds that carry a `jlink`-trimmed JRE, the
-  Java equivalent of the Python backend's bundled interpreter.
+- The **Java** build and the **Kotlin** build add two more container-only
+  toolchains. `src/java-api` is Maven and `src/kotlin-api` is Gradle, through the
+  wrapper the repo commits; both carry a `jlink`-trimmed JRE, the Java equivalent
+  of the Python backend's bundled interpreter.
   `src/java-api/Dockerfile.aot` runs `native-image` on GraalVM's own `-ol9`
   image, because a GraalVM binary links glibc dynamically and so has to be built
   against the same 2.34 Amazon Linux 2023 ships. All three target Java 25 (LTS);
@@ -220,7 +221,7 @@ counts against the **250 MB unzipped limit** for each function.
 | Java (Spring Boot, JVM)     |   55.9 |     82.0 |   201 | a `jlink`'d JRE plus the app jar               |
 | Blazor (interpreted WASM)   |   56.8 |    135.5 |   504 | .NET plus the WebAssembly client               |
 | Blazor (AOT WASM)           |   66.6 |    154.8 |   504 | as above, plus the Emscripten-compiled client  |
-| Kotlin (Ktor, JVM)          |   67.1 |     93.3 |   201 | the same JRE plus a shaded fat jar             |
+| Kotlin (Ktor, JVM)          |   67.0 |     93.3 |   201 | the same JRE plus a shaded fat jar             |
 
 All ten zipped come to ~348 MB and unzipped to ~735 MB. The unzipped total is the
 one that matters for storage: each function gets its own extracted copy, so that
@@ -294,7 +295,7 @@ both of that project's builds and doubles as a check that the revision's
 - [FastAPI](https://fastapi.tiangolo.com) and [uvicorn](https://www.uvicorn.org)
 - [Spring Boot](https://spring.io/projects/spring-boot), [jlink](https://docs.oracle.com/en/java/javase/25/docs/specs/man/jlink.html) (the trimmed JRE), and [Spring Boot native images](https://docs.spring.io/spring-boot/4.1/how-to/native-image/index.html)
 - [GraalVM Native Image](https://www.graalvm.org/latest/reference-manual/native-image/) and its [glibc linkage](https://www.graalvm.org/latest/reference-manual/native-image/guides/build-static-executables/) (why the build pins `-ol9`)
-- [Ktor](https://ktor.io) and [Netty](https://netty.io)
+- [Ktor](https://ktor.io) and [Netty](https://netty.io), built with [Gradle](https://docs.gradle.org/current/userguide/userguide.html) (the wrapper is committed) and pinned through a [version catalog](https://docs.gradle.org/current/userguide/version_catalogs.html)
 - [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
 - [Hono](https://hono.dev)
 

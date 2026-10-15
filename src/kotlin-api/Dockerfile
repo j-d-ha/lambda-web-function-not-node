@@ -1,29 +1,35 @@
 # syntax=docker/dockerfile:1
 
 # Builds the Kotlin/Ktor backend's zip on linux/arm64. Same shape as
-# src/java-api -- a jlink'd JRE travels in the zip because there is no Java in
-# the Web Function environment -- but a different framework and build: Ktor on
-# Netty rather than Spring Boot on Tomcat, and a shaded fat jar rather than
-# Spring's repackaged one. Only the finished zip is exported.
-FROM maven:3.9-eclipse-temurin-25 AS build
+# src/java-api -- a jlink'd JRE travels in the zip, because there is no Java in
+# the Web Function environment -- but a different framework and a different
+# build: Ktor on Netty rather than Spring Boot on Tomcat, and Gradle rather than
+# Maven. Only the finished zip is exported.
+FROM eclipse-temurin:25-jdk AS build
 
-# curl and zip are what smoke.sh and the packaging need; the Maven image has
-# neither.
+# curl, zip and unzip are what smoke.sh, the packaging and the Gradle wrapper
+# need; the JDK image has none of them.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl zip \
+    && apt-get install -y --no-install-recommends curl zip unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
 
-# Resolve the dependencies before the source lands, so editing a .kt file does
-# not re-download the world.
-COPY src/kotlin-api/pom.xml ./src/kotlin-api/pom.xml
-RUN mvn -B --no-transfer-progress -f src/kotlin-api/pom.xml dependency:go-offline
-
+# The wrapper, the build files and the source. The build runs through the
+# committed wrapper rather than a Gradle image, so the Gradle version is pinned
+# in the repo and the same command works locally.
+COPY src/kotlin-api/gradle ./src/kotlin-api/gradle
+COPY src/kotlin-api/gradlew ./src/kotlin-api/gradlew
+COPY src/kotlin-api/settings.gradle.kts src/kotlin-api/build.gradle.kts ./src/kotlin-api/
 COPY src/kotlin-api/src ./src/kotlin-api/src
 # The two scripts the build and the smoke test run.
 COPY src/kotlin-api/server.sh src/kotlin-api/smoke.sh ./src/kotlin-api/
-RUN mvn -B --no-transfer-progress -f src/kotlin-api/pom.xml -DskipTests package
+
+# The wrapper downloads the Gradle distribution the first time it runs, so the
+# Gradle home is a cache mount rather than an image layer -- without this, every
+# source edit would re-download Gradle and the whole dependency set.
+RUN --mount=type=cache,target=/root/.gradle \
+    cd src/kotlin-api && ./gradlew --no-daemon --console=plain buildFatJar
 
 # jlink is the Java equivalent of the Python backend's interpreter trim:
 # java.se is every Java SE module, jdk.unsupported the sun.misc.Unsafe that
@@ -38,7 +44,7 @@ RUN jlink \
 # launcher is a shell script with a shebang, so the executable bit is what makes
 # it runnable at all.
 RUN mkdir -p /var/task \
-    && cp src/kotlin-api/target/app.jar /var/task/app.jar \
+    && cp src/kotlin-api/build/libs/kotlin-api-all.jar /var/task/app.jar \
     && cp -r /jre /var/task/jre \
     && cp src/kotlin-api/server.sh /var/task/server \
     && chmod +x /var/task/server
