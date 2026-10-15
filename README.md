@@ -215,10 +215,10 @@ counts against the **250 MB unzipped limit** for each function.
 | ASP.NET (.NET runtime)      |   44.8 |    115.0 |   334 | the whole .NET runtime, untrimmed              |
 | Java (Spring Boot, JVM)     |   55.6 |     81.5 |   195 | a `jlink`'d JRE plus the app jar               |
 | Blazor (interpreted WASM)   |   56.8 |    135.5 |   504 | .NET plus the WebAssembly client               |
-| Kotlin (Ktor, JVM)          |   61.8 |     87.3 |   195 | the same JRE plus a shaded fat jar             |
+| Kotlin (Ktor, JVM)          |   65.8 |     91.7 |   195 | the same JRE plus a shaded fat jar             |
 | Blazor (AOT WASM)           |   66.6 |    154.8 |   504 | as above, plus the Emscripten-compiled client  |
 
-All ten zipped come to ~340 MB and unzipped to ~723 MB. The unzipped total is the
+All ten zipped come to ~344 MB and unzipped to ~727 MB. The unzipped total is the
 one that matters for storage: each function gets its own extracted copy, so that
 is roughly the footprint of the whole demo once every backend is deployed. Blazor
 AOT is the closest to the ceiling, at ~155 MB unzipped.

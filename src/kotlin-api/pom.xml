@@ -15,6 +15,9 @@
   <properties>
     <kotlin.version>2.4.21</kotlin.version>
     <ktor.version>3.6.0</ktor.version>
+    <!-- Matched to the version Ktor 3.6.0 itself depends on, so the compiler
+         plugin and the runtime library agree. -->
+    <kotlinx.serialization.version>1.11.0</kotlinx.serialization.version>
     <slf4j.version>2.0.16</slf4j.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -35,6 +38,24 @@
       <groupId>io.ktor</groupId>
       <artifactId>ktor-server-netty-jvm</artifactId>
       <version>${ktor.version}</version>
+    </dependency>
+    <!-- Content negotiation plus the kotlinx.serialization JSON converter, so
+         the payload is a serialized data class rather than a hand-written
+         string. -->
+    <dependency>
+      <groupId>io.ktor</groupId>
+      <artifactId>ktor-server-content-negotiation-jvm</artifactId>
+      <version>${ktor.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.ktor</groupId>
+      <artifactId>ktor-serialization-kotlinx-json-jvm</artifactId>
+      <version>${ktor.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains.kotlinx</groupId>
+      <artifactId>kotlinx-serialization-json</artifactId>
+      <version>${kotlinx.serialization.version}</version>
     </dependency>
     <!-- Ktor logs through SLF4J and warns without a binding. -->
     <dependency>
@@ -63,7 +84,23 @@
         </executions>
         <configuration>
           <jvmTarget>21</jvmTarget>
+          <!-- @Serializable is a compiler plugin, not a library: without this
+               the annotation compiles to nothing and the serializer is missing
+               at runtime. -->
+          <compilerPlugins>
+            <plugin>kotlinx-serialization</plugin>
+          </compilerPlugins>
         </configuration>
+        <dependencies>
+          <!-- kotlin-maven-plugin resolves compiler plugins from its own
+               classpath, not the project's, so the plugin has to be declared
+               here as well as named above. -->
+          <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-maven-serialization</artifactId>
+            <version>${kotlin.version}</version>
+          </dependency>
+        </dependencies>
       </plugin>
       <plugin>
         <!-- One jar with the Ktor and Netty classes inside, so the launcher is

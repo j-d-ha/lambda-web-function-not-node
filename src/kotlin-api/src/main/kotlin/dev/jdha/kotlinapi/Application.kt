@@ -1,9 +1,11 @@
 package dev.jdha.kotlinapi
 
-import io.ktor.http.ContentType
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import io.ktor.server.response.respondText
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import java.net.URI
@@ -11,6 +13,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.concurrent.CountDownLatch
+import kotlinx.serialization.Serializable
 
 /**
  * The Kotlin/Ktor backend, on a Lambda Web Function.
@@ -22,11 +25,15 @@ import java.util.concurrent.CountDownLatch
  * also replaces the runtime interface client, this app POSTs
  * `/2025-09-01/ready` itself once Netty is bound.
  *
- * The response is a literal, not a serialized data class: it is four fields of
- * fixed text and the smoke test asserts it byte for byte, so a JSON library
- * would be a dependency bought for nothing.
+ * The payload is a serialized data class, not a hand-written string, so this
+ * backend answers the way the other nine do: Ktor's content negotiation and
+ * kotlinx.serialization on the way out, the same shape Go marshals and ASP.NET
+ * and Spring serialize.
  */
-private const val HEALTH_JSON = """{"status":"Ok","backend":"kotlin"}"""
+
+/** The response shape every backend in this repo shares. */
+@Serializable
+data class Health(val status: String, val backend: String)
 
 fun main() {
     // AWS_LAMBDA_HTTP_ENDPOINT is host:port.
@@ -35,8 +42,9 @@ fun main() {
     val port = endpoint.substringAfterLast(':').toInt()
 
     val server = embeddedServer(Netty, host = host, port = port) {
+        install(ContentNegotiation) { json() }
         routing {
-            get("/health") { call.respondText(HEALTH_JSON, ContentType.Application.Json) }
+            get("/health") { call.respond(Health("Ok", "kotlin")) }
         }
     }
 
