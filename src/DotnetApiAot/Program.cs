@@ -3,7 +3,7 @@ using DotnetApiAot;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
-builder.ConfigureWebFunction();
+builder.ConfigureWebFunctionHosting();
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {

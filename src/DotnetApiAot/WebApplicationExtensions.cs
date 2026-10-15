@@ -11,7 +11,7 @@ public static class WebApplicationExtensions
         /// Applies the Lambda Web Function contract: listen where the shim says, and
         /// report ready to the runtime API once Kestrel is listening.
         /// </summary>
-        public WebApplicationBuilder ConfigureWebFunction()
+        public WebApplicationBuilder ConfigureWebFunctionHosting()
         {
             if (Environment.TryGetEnvironmentVariable(
                 "AWS_LAMBDA_HTTP_ENDPOINT",
