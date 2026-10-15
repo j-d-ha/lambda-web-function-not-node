@@ -77,8 +77,8 @@ The runtime library version is matched to the one Ktor 3.6.0 itself depends on
   export stage copies out only `build/kotlin-api.zip`. Needs Docker and network
   access.
 - That build also runs `smoke.sh` in the container. The bundle is a linux-arm64
-  tree, so this is the only place the shipped JRE is actually exercised. Do not
-  delete the smoke step.
+  tree, so this is the only place the shipped JRE is exercised. Do not delete
+  the smoke step.
 
 ## Notes
 

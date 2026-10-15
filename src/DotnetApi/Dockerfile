@@ -23,7 +23,7 @@ COPY src/DotnetApi/ ./src/DotnetApi/
 
 # Self-contained and untrimmed on purpose: reflection is a requirement, so
 # every framework assembly and its metadata stays in the bundle. This is what
-# makes the zip ~45 MB zipped where the AOT build is ~10 MB.
+# makes the zip ~45 MB zipped where the AOT build is ~5.7 MB.
 RUN dotnet publish src/DotnetApi/DotnetApi.csproj -c Release -r linux-arm64 \
         --self-contained true -o /var/task --nologo
 

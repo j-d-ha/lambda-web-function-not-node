@@ -11,7 +11,7 @@ runtime and framework assemblies beside it. The shim replaces Node with
 POSTs `/2025-09-01/ready` to the runtime API itself once Kestrel is listening.
 
 `src/DotnetApiAot` is the sibling that makes the opposite trade: it trims and
-AOT-compiles down to a single ~10 MB binary and gives up reflection. This one
+AOT-compiles down to one native binary and gives up reflection. This one
 keeps reflection and pays for it in size. `GET /health` returns
 `{"status":"Ok","backend":"dotnet"}`; the AOT sibling returns
 `{"status":"OK","backend":"dotnet-aot"}`.
@@ -58,7 +58,7 @@ of routing, DI and the rest of the framework.
   export stage copies out only `build/dotnet-api.zip`. Needs Docker.
 - That build also runs `smoke.sh` in the container. The bundle is a
   linux-arm64 binary tree, so this is the only place the shipped runtime is
-  actually exercised: do not delete the smoke step.
+  exercised: do not delete the smoke step.
 
 ## Notes
 

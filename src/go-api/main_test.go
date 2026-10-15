@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// The /health payload is the contract shared with the Node and ASP.NET
-// backends, so guard it byte for byte.
+// The /health payload is the contract every backend in this repo shares, so
+// guard it byte for byte.
 func TestHealthMatchesTheSharedContract(t *testing.T) {
 	rec := httptest.NewRecorder()
 	newHandler().ServeHTTP(rec, httptest.NewRequest("GET", "/health", nil))

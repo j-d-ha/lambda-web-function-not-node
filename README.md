@@ -186,10 +186,12 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   image also installs). The server half is a self-contained untrimmed publish
   like `DotnetApi`; only the client bundle differs between the two zips. The
   AOT publish is slow: it compiles every assembly to WebAssembly.
-- The Go and .NET zips put the shim and the binary in the zip root (via
-  `zip -j`), because the shim hardcodes `/var/task/server`. The Node zip needs
-  no shim: Node is the runtime Lambda already boots, so its bundled entrypoint
-  is the `index.js` Lambda imports.
+- Every non-Node zip puts the shim and the entrypoint in the zip root, because
+  the shim hardcodes `/var/task/server`. Go and the NativeAOT build flatten
+  their two files with `zip -j`; the container builds (managed .NET, Blazor,
+  Python, Java, Kotlin) copy the bundle into `/var/task` first and zip that. The
+  Node zip needs no shim: Node is the runtime Lambda already boots, so its
+  bundled entrypoint is the `index.js` Lambda imports.
 - The Python build is a real [uv](https://docs.astral.sh/uv/) project
   (`pyproject.toml` + `uv.lock` + `.python-version`) built by
   [`src/python-api/Dockerfile`](src/python-api/Dockerfile) on `linux/arm64`.
@@ -218,7 +220,7 @@ counts against the **512 MB unzipped limit** for each Web Function revision.
 
 | Backend                     | Zipped | Unzipped | Files | What the bulk is                               |
 | --------------------------- | -----: | -------: | ----: | ---------------------------------------------- |
-| Node.js (reference)         |  23 KB |    90 KB |     2 | the bundled Hono app                           |
+| Node.js (reference)         |  23 KB |    90 KB |     1 | the bundled Hono app                           |
 | Go                          |    4.5 |      8.3 |     2 | one static binary                              |
 | ASP.NET (NativeAOT)         |    5.7 |     13.0 |     3 | one static binary                              |
 | Python (FastAPI)            |   17.1 |     47.7 | 1,623 | a relocatable CPython plus the locked wheels   |
@@ -234,7 +236,7 @@ one that matters for storage: each function gets its own extracted copy, so that
 is roughly the footprint of the whole demo once every backend is deployed. Blazor
 AOT is the closest to the ceiling, at ~155 MB unzipped.
 
-Two things to know about what Lambda actually stores:
+Two things to know about what Lambda stores:
 
 - The code bucket is **versioned**, because a revision pins one exact object
   version. Every deploy of any backend uploads a new version of its zip rather
@@ -274,7 +276,7 @@ and a region where Web Functions are available.
 The Python test also runs inside `task build:python-api`, which additionally
 boots the assembled bundle on `linux/arm64` and checks `/health` before it zips
 it. The bundle only runs on the target architecture, so that is where the
-interpreter and wheels are actually exercised. `task build:dotnet-api` does the
+interpreter and wheels are exercised. `task build:dotnet-api` does the
 same for the managed .NET build: `src/DotnetApi/smoke.sh` boots the published
 bundle and checks `/health` before the zip is written. `src/blazor/BlazorApp/smoke.sh`
 goes further for the Blazor builds: it checks that the home page actually

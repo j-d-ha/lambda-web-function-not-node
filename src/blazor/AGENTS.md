@@ -84,10 +84,9 @@ rather than reasoned about: `build:blazor-aot` ships with
 `WasmStripILAfterAOT=true`, and its `BackendProbe` still deserializes
 `/api/hello` and re-fetches on click in the browser.
 
-That is the finding worth keeping: **IL stripping after AOT did not break
-reflection JSON here.** If someone later sets `TrimMode=full`, or a reflected
-member does get stripped, *that* is when a `JsonSerializerContext` becomes
-necessary, not before.
+**IL stripping after AOT did not break reflection JSON here.** If someone later
+sets `TrimMode=full`, or a reflected member does get stripped, *that* is when a
+`JsonSerializerContext` becomes necessary, not before.
 
 ## Size
 

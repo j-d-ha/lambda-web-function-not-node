@@ -48,7 +48,7 @@ cross-platform resolution on the host.
 - That build also runs `uv run python -m unittest` and `smoke.sh`, which boots
   the assembled bundle and checks `/health`. The bundle only runs on the target
   architecture, so this is the only place the interpreter and wheels are
-  actually exercised: do not delete the smoke step without putting the check
+  exercised: do not delete the smoke step without putting the check
   somewhere else.
 
 ## Notes

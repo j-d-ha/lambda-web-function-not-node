@@ -4,7 +4,7 @@ import { InfraStack } from "../lib/infra-stack";
 
 const app = new cdk.App();
 
-// The CloudFormation-Validate plugin bundled with aws-cdk-lib 2.273.0 doesn't
+// The CloudFormation-Validate plugin bundled with this CDK release doesn't
 // recognize the Web Function resource types yet. They are real, deployed
 // resource types; acknowledge the check so synth succeeds.
 cdk.Validations.of(app).acknowledge({

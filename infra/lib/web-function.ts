@@ -72,8 +72,8 @@ export interface WebFunctionProps {
 
   /**
    * Regions to serve the endpoint from. Required when endpointType is
-   * MULTI_REGION or PER_REGION: at least one region other than the home
-   * region; the home region alone is not accepted.
+   * MULTI_REGION or PER_REGION: a non-empty list. The construct checks only
+   * that it is non-empty; Region validity is enforced at deploy time.
    */
   readonly regions?: Array<string>;
 
@@ -259,7 +259,7 @@ export class WebFunction extends Construct {
       prune: false,
     });
 
-    // 5. The web function itself: just a name.
+    // 5. The web function itself.
     this.function = new CfnWebFunction(this, "Function", {
       functionName: props.functionName,
       tags: props.tags,

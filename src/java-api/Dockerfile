@@ -26,7 +26,7 @@ RUN mvn -B --no-transfer-progress -f src/java-api/pom.xml -DskipTests package
 
 # jlink is the Java equivalent of the Python backend's interpreter trim:
 # java.se is every Java SE module, jdk.unsupported the sun.misc.Unsafe that
-# Netty and Spring reach for, jdk.crypto.ec the EC TLS providers, and jdk.zipfs
+# Spring reaches for, jdk.crypto.ec the EC TLS providers, and jdk.zipfs
 # the zip filesystem the fat-jar loader reads through.
 RUN jlink \
         --add-modules java.se,jdk.unsupported,jdk.crypto.ec,jdk.zipfs \
