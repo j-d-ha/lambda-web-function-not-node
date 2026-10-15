@@ -14,7 +14,20 @@ show the shim does not care which JVM web stack sits on top of it.
 
 `GET /health` returns `{"status":"Ok","backend":"kotlin"}`.
 
-Measured for linux-arm64: **~92 MB unzipped / ~66 MB zipped**, of which
+## Versions
+
+Kotlin **2.4.21** and Ktor **3.6.0**, both current stable, compiled for JVM **25**
+to match the JDK in the image and the other two JVM backends. The 2.5.0-Beta1
+prerelease is deliberately not used.
+
+One deliberate deviation from the Kotlin default: this builds with **Maven**,
+where a new Kotlin project would normally use Gradle. Maven shares a build tool
+and a base image with `src/java-api` and `src/java-aot-api`, and what is under
+test here is the execve shim, not the build tool. Kotlin has no objection —
+`kotlin-maven-plugin` is supported and the compiler plugins are the same ones
+Gradle uses — but a reader expecting Gradle should know it was a choice.
+
+Measured for linux-arm64: **~93 MB unzipped / ~67 MB zipped**, of which
 `app.jar` is ~30 MB. The JRE dominates, exactly as it does in `src/java-api` —
 the two differ mostly by the size of their fat jar, not their runtime. Content
 negotiation and kotlinx.serialization account for ~5 MB of the jar.
@@ -80,5 +93,10 @@ The runtime library version is matched to the one Ktor 3.6.0 itself depends on
 - `server.sh` sets `-XX:MaxRAMPercentage=75`, for the same reason
   `src/java-api/server.sh` does: the Web Function environment is 2 GB and the
   JVM's container-aware default is 25%.
+- The server starts programmatically through `embeddedServer` rather than Ktor's
+  `EngineMain` and an `application.conf`. `AWS_LAMBDA_HTTP_ENDPOINT` arrives as
+  one `host:port` string that HOCON cannot split, and `/ready` has to fire
+  exactly when the engine is bound, which is what `start(wait = false)`
+  returning already tells you. Both are plainer in code than in config.
 - The `.zip` is fed to `AWS::Lambda::WebFunction` by
   `infra/lib/infra-stack.ts` as `kotlin-api-web`.

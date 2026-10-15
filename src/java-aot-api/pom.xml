@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.5.16</version>
+    <version>4.1.1</version>
     <relativePath/>
   </parent>
 
@@ -17,13 +17,18 @@
   <name>java-aot-api</name>
 
   <properties>
-    <java.version>21</java.version>
+    <!-- Java 25 is the current LTS and, for this backend, a hard requirement:
+         Spring Boot 4 refuses to start in a native image built with an earlier
+         Java, so the GraalVM build below is pinned to JDK 25 as well. -->
+    <java.version>25</java.version>
   </properties>
 
   <dependencies>
     <dependency>
+      <!-- Spring Boot 4 split the catch-all starters: the servlet stack moved
+           from spring-boot-starter-web to spring-boot-starter-webmvc. -->
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
   </dependencies>
 

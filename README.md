@@ -196,7 +196,9 @@ Web Functions are arm64 only (Graviton), so every artifact is built for
   Java equivalent of the Python backend's bundled interpreter. `src/java-aot-api`
   runs `native-image` on GraalVM's own `-ol9` image, because a GraalVM binary
   links glibc dynamically and so has to be built against the same 2.34 Amazon
-  Linux 2023 ships. See [`src/java-api/AGENTS.md`](src/java-api/AGENTS.md) and
+  Linux 2023 ships. All three target Java 25 (LTS); the native one has to, since
+  Spring Boot 4 refuses to start a native image built below it. See
+  [`src/java-api/AGENTS.md`](src/java-api/AGENTS.md) and
   [`src/java-aot-api/AGENTS.md`](src/java-aot-api/AGENTS.md).
 
 ## Package sizes
@@ -211,14 +213,14 @@ counts against the **250 MB unzipped limit** for each function.
 | Go                          |    4.5 |      8.3 |     2 | one static binary                              |
 | ASP.NET (NativeAOT)         |    5.7 |     13.0 |     3 | one static binary                              |
 | Python (FastAPI)            |   17.1 |     47.7 | 1,623 | a relocatable CPython plus the locked wheels   |
-| Java (GraalVM native-image) |   26.8 |     79.6 |     2 | one binary, every reachable Spring class in it |
+| Java (GraalVM native-image) |   29.6 |     85.1 |     2 | one binary, every reachable Spring class in it |
 | ASP.NET (.NET runtime)      |   44.8 |    115.0 |   334 | the whole .NET runtime, untrimmed              |
-| Java (Spring Boot, JVM)     |   55.6 |     81.5 |   195 | a `jlink`'d JRE plus the app jar               |
+| Java (Spring Boot, JVM)     |   55.9 |     81.9 |   201 | a `jlink`'d JRE plus the app jar               |
 | Blazor (interpreted WASM)   |   56.8 |    135.5 |   504 | .NET plus the WebAssembly client               |
-| Kotlin (Ktor, JVM)          |   65.8 |     91.7 |   195 | the same JRE plus a shaded fat jar             |
 | Blazor (AOT WASM)           |   66.6 |    154.8 |   504 | as above, plus the Emscripten-compiled client  |
+| Kotlin (Ktor, JVM)          |   67.1 |     93.3 |   201 | the same JRE plus a shaded fat jar             |
 
-All ten zipped come to ~344 MB and unzipped to ~727 MB. The unzipped total is the
+All ten zipped come to ~348 MB and unzipped to ~735 MB. The unzipped total is the
 one that matters for storage: each function gets its own extracted copy, so that
 is roughly the footprint of the whole demo once every backend is deployed. Blazor
 AOT is the closest to the ceiling, at ~155 MB unzipped.
@@ -232,11 +234,11 @@ Two things worth knowing about what Lambda actually stores:
 - S3 holds the zipped bytes, so the bucket's usage tracks the **Zipped** column,
   not the unzipped one.
 
-Read the Java pair together: the GraalVM build uploads less than half of what
-the JVM build does (27 MB against 56 MB) but extracts to almost the same size (80
-MB against 82 MB). Ahead-of-time compilation removes the JVM from the download;
-it does not remove the framework's code from the artifact. It buys startup time,
-not extract size.
+Read the Java pair together: the GraalVM build uploads about half of what the JVM
+build does (30 MB against 56 MB) but extracts to slightly *more* (85 MB against 82
+MB). Ahead-of-time compilation removes the JVM from the download; it does not
+remove the framework's code from the artifact, and the heap image it generates is
+not small. It buys startup time, not size.
 
 ## Deploy
 
@@ -286,7 +288,7 @@ the bundle only runs on the target architecture.
 - [Web Functions networking](https://docs.aws.amazon.com/lambda/latest/dg/web-functions-networking.html) (why no server-interactive Blazor)
 - [python-build-standalone](https://github.com/astral-sh/python-build-standalone) (the bundled CPython)
 - [FastAPI](https://fastapi.tiangolo.com) and [uvicorn](https://www.uvicorn.org)
-- [Spring Boot](https://spring.io/projects/spring-boot), [jlink](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jlink.html) (the trimmed JRE), and [Spring Boot native images](https://docs.spring.io/spring-boot/3.5/how-to/native-image/index.html)
+- [Spring Boot](https://spring.io/projects/spring-boot), [jlink](https://docs.oracle.com/en/java/javase/25/docs/specs/man/jlink.html) (the trimmed JRE), and [Spring Boot native images](https://docs.spring.io/spring-boot/4.1/how-to/native-image/index.html)
 - [GraalVM Native Image](https://www.graalvm.org/latest/reference-manual/native-image/) and its [glibc linkage](https://www.graalvm.org/latest/reference-manual/native-image/guides/build-static-executables/) (why the build pins `-ol9`)
 - [Ktor](https://ktor.io) and [Netty](https://netty.io)
 - [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/home.html)

@@ -9,12 +9,12 @@
 # 2023 and the Web Function environment, ship. Building on a newer distro would
 # emit a binary that fails to load there. (The Go and .NET AOT backends sidestep
 # this by linking statically; GraalVM does not.)
-FROM ghcr.io/graalvm/native-image-community:21-ol9 AS build
+FROM ghcr.io/graalvm/native-image-community:25-ol9 AS build
 
 # Maven from its own image: GraalVM's image has the JDK, native-image and the C
 # toolchain native-image needs, but no build tool. Maven is portable shell plus
 # jars, so copying it over is enough.
-COPY --from=maven:3.9-eclipse-temurin-21 /usr/share/maven /opt/maven
+COPY --from=maven:3.9-eclipse-temurin-25 /usr/share/maven /opt/maven
 ENV PATH=/opt/maven/bin:$PATH
 
 # curl and zip are what smoke.sh and the packaging need.

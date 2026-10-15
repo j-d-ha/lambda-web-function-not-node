@@ -4,7 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.Map;
+import java.util.HashMap;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -36,15 +36,26 @@ public class JavaAotApiApplication {
     public static void main(String[] args) {
         var app = new SpringApplication(JavaAotApiApplication.class);
 
+        var properties = new HashMap<String, Object>();
+
+        // Tomcat runs each request on a virtual thread. A Web Function puts many
+        // concurrent requests in one execution environment (64 by default, 128
+        // at most), which is the case virtual threads exist for: a request
+        // parked on I/O costs a few hundred bytes of heap instead of a platform
+        // thread's stack. This handler does no I/O, so it cannot show the win --
+        // the flag is here because it is the right default for a servlet app on
+        // this platform, not because it moved a number.
+        properties.put("spring.threads.virtual.enabled", "true");
+
         // AWS_LAMBDA_HTTP_ENDPOINT is host:port; Spring Boot wants the two apart.
         String endpoint = System.getenv("AWS_LAMBDA_HTTP_ENDPOINT");
         if (endpoint != null && !endpoint.isBlank()) {
             int split = endpoint.lastIndexOf(':');
-            app.setDefaultProperties(Map.of(
-                    "server.address", endpoint.substring(0, split),
-                    "server.port", endpoint.substring(split + 1)));
+            properties.put("server.address", endpoint.substring(0, split));
+            properties.put("server.port", endpoint.substring(split + 1));
         }
 
+        app.setDefaultProperties(properties);
         app.run(args);
     }
 

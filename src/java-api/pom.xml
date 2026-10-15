@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.5.16</version>
+    <version>4.1.1</version>
     <relativePath/>
   </parent>
 
@@ -17,13 +17,18 @@
   <name>java-api</name>
 
   <properties>
-    <java.version>21</java.version>
+    <!-- Java 25 is the current LTS (Sept 2025). Java 27 is newer but is a
+         non-LTS release with updates only until March 2027, and Spring Boot
+         4.1 supports Java up to 26, so 25 is the version to target. -->
+    <java.version>25</java.version>
   </properties>
 
   <dependencies>
     <dependency>
+      <!-- Spring Boot 4 split the catch-all starters: the servlet stack moved
+           from spring-boot-starter-web to spring-boot-starter-webmvc. -->
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
   </dependencies>
 

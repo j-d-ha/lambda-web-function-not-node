@@ -5,7 +5,7 @@
 # the Web Function environment -- but a different framework and build: Ktor on
 # Netty rather than Spring Boot on Tomcat, and a shaded fat jar rather than
 # Spring's repackaged one. Only the finished zip is exported.
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 
 # curl and zip are what smoke.sh and the packaging need; the Maven image has
 # neither.

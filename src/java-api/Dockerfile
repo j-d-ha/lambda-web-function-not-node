@@ -4,7 +4,7 @@
 # carries its runtime: jlink builds a trimmed JRE beside the app jar, because
 # there is no Java in the Web Function environment to fall back on. Only the
 # finished zip is exported.
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 
 # curl and zip are what smoke.sh and the packaging need; the Maven image has
 # neither.

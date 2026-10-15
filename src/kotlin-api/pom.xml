@@ -19,7 +19,7 @@
          plugin and the runtime library agree. -->
     <kotlinx.serialization.version>1.11.0</kotlinx.serialization.version>
     <slf4j.version>2.0.16</slf4j.version>
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -83,7 +83,7 @@
           </execution>
         </executions>
         <configuration>
-          <jvmTarget>21</jvmTarget>
+          <jvmTarget>25</jvmTarget>
           <!-- @Serializable is a compiler plugin, not a library: without this
                the annotation compiles to nothing and the serializer is missing
                at runtime. -->

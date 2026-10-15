@@ -18,13 +18,19 @@ listening.
 `GET /health` returns `{"status":"Ok","backend":"java-aot"}`; the JVM sibling
 returns `{"status":"Ok","backend":"java"}`.
 
-Measured for linux-arm64: **~83 MB unzipped / ~28 MB zipped**. The zip is
-smaller than `src/java-api`'s ~58 MB, but the binary is not: at ~80 MB it is
-about the size of that backend's whole JRE, because it carries a heap image and
-every reachable Tomcat, Jackson and Spring class compiled ahead of time. What
-the trade actually buys is startup and no JVM, not a smaller artifact — Go and
-.NET NativeAOT are the ones that get both, because they have far less framework
-to compile in.
+## Versions
+
+Java **25** (LTS) and Spring Boot **4.1**; `src/java-api/AGENTS.md` has the full
+reasoning. Here the Java version is a hard floor rather than a preference, which
+is the one way the two siblings are not interchangeable.
+
+Measured for linux-arm64: **~85 MB unzipped / ~30 MB zipped**. The zip is
+smaller than `src/java-api`'s ~56 MB, but the binary is not: at ~85 MB it is the
+size of that backend's whole JRE plus its jar, because it carries a heap image and
+every reachable Tomcat, Jackson and Spring class compiled ahead of time. What the
+trade actually buys is startup and no JVM, not a smaller artifact — Go and .NET
+NativeAOT are the ones that get both, because they have far less framework to
+compile in.
 
 ## Why the build pins `-ol9`
 
@@ -32,14 +38,33 @@ Unlike Go (`CGO_ENABLED=0`) and .NET NativeAOT, a GraalVM native binary is **not
 statically linked: by default it links `libc`, `libpthread`, `librt`, `libdl` and
 `libz` dynamically, so the glibc it was built against becomes a runtime
 requirement. The Web Function environment is Amazon Linux 2023, glibc 2.34, so
-the build runs on `ghcr.io/graalvm/native-image-community:21-ol9` — Oracle Linux
+the build runs on `ghcr.io/graalvm/native-image-community:25-ol9` — Oracle Linux
 9, also glibc 2.34. Building on a newer distro would link symbols AL2023 does not
 have and the binary would fail to load there.
 
-That is also why the smoke test cannot prove this on its own: it runs in the
-same container that built the binary, so it validates startup, not portability.
-The `-ol9` pin is what makes the portability claim true — do not relax it to a
-generic tag.
+There is a second reason the tag reads `25`. Glibc is not the only pin: Spring
+Boot 4 will not start in a native image built below Java 25, so the GraalVM
+version is not a free choice either, and it has to move in step with the Java
+version in `pom.xml`. Those two constraints are independent, and both are
+satisfied by the `-ol9` tag of the JDK you are compiling for.
+
+That is also why the in-container smoke test cannot prove it on its own: it runs
+in the same container that built the binary, so it validates startup, not
+portability. The `-ol9` pin is what makes the portability claim true — do not
+relax it to a generic tag.
+
+Verified by hand, since the build cannot: unzip the artifact and run `server` in
+`public.ecr.aws/lambda/provided:al2023`. It boots and answers `/health` there on
+glibc 2.34, and `readelf -d` shows no `RPATH`/`RUNPATH` and only `libz.so.1`,
+`libc.so.6` and `ld-linux-aarch64.so.1` as `NEEDED` — nothing resolved out of the
+build directory. Re-run that check whenever the GraalVM tag or the JVM flags
+change.
+
+GraalVM 25 also writes optional `lib*.so` shims (`libawt.so`,
+`libmanagement_ext.so`, `libjvm.so`, …) beside the binary in `target/`. This app
+does not use them and the build copies only `target/server`, which the AL2023
+check above confirms is sufficient — do not start copying the whole target
+directory in.
 
 ## Layout
 
@@ -76,6 +101,9 @@ generic tag.
 ## Notes
 
 - Everything must be built for **linux/arm64** (Web Functions are Arm64 only).
+- Java 25 is not optional here. A Spring Boot 4 native image built below Java 25
+  aborts at startup with a version error, so `pom.xml`, the GraalVM image tag and
+  the Maven image tag all have to agree on the JDK.
 - `-Pnative` is what turns on Spring's AOT processing and registers the
   reachability metadata. Building without it, or without the
   `spring-boot-maven-plugin` repackage, fails with a confusing version error
